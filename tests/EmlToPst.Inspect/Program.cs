@@ -2,7 +2,8 @@ using System.Text.Json;
 using XstReader;
 using XstReader.ElementProperties;
 
-if (args.Length != 1) return 2;
+if (args.Length is < 1 or > 2 || (args.Length == 2 && args[1] != "--summary")) return 2;
+bool summary = args.Length == 2;
 using var file = new XstFile(args[0]);
 var messages = new List<object>();
 void Walk(XstFolder folder, string parent)
@@ -13,8 +14,20 @@ void Walk(XstFolder folder, string parent)
         var attachments = new List<object>();
         foreach (var attachment in message.Attachments)
         {
-            var content = attachment.Properties[PropertyCanonicalName.PidTagAttachDataBinary]?.Value;
-            attachments.Add(new { filename = attachment.LongFileName, cid = attachment.ContentId, content = content is byte[] bytes ? Convert.ToBase64String(bytes) : null });
+            // XstReader represents out-of-line binary properties as node IDs.
+            // Its export API resolves both inline bytes and streamed subnodes.
+            using var content = new MemoryStream();
+            attachment.SaveToStream(content);
+            byte[] bytes = content.GetBuffer();
+            int length = checked((int)content.Length);
+            attachments.Add(new
+            {
+                filename = attachment.LongFileName,
+                cid = attachment.ContentId,
+                content = !summary ? Convert.ToBase64String(bytes, 0, length) : null,
+                size = content.Length,
+                sha256 = summary ? Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes.AsSpan(0, length))).ToLowerInvariant() : null
+            });
         }
         object? Get(PropertyCanonicalName property) => message.Properties[property]?.Value;
         messages.Add(new

@@ -8,10 +8,11 @@ namespace EmlToPst.Pst;
 
 public sealed class PstArchive : IDisposable
 {
-    public const long MaxInputBytes = 100L * 1024 * 1024;
-    public const long MaxFileBytes = 25L * 1024 * 1024;
+    public const long MaxInputBytes = 4L * 1024 * 1024 * 1024;
+    public const long MaxFileBytes = 100L * 1024 * 1024;
+    public const long MaxPartInputBytes = 100L * 1024 * 1024;
     public const int MaxFiles = 1000;
-    private readonly LimitedMemoryStream stream = new(300L * 1024 * 1024);
+    private readonly LimitedMemoryStream stream = new(384L * 1024 * 1024);
     private readonly PstOutputStream output;
     private readonly StoreWriter writer = new() { StoreDisplayName = "가져온 메일" };
     private bool completed;
@@ -66,14 +67,17 @@ public sealed class PstArchive : IDisposable
         {
             using var data = new MemoryStream();
             EmlReader.WriteAttachment(entity, data);
-            message.Attachments.Add(new AttachmentItem
-            {
-                FileName = EmlReader.AttachmentName(entity, ++index),
-                Content = data.ToArray(),
-                MimeType = entity.ContentType.MimeType,
-                ContentId = entity.ContentId,
-                IsInline = !entity.IsAttachment && !string.IsNullOrEmpty(entity.ContentId)
-            });
+            // Keep the decoded buffer without making a second attachment-sized copy.
+            // The writer consumes it block by block; the factory captures only the buffer.
+            byte[] payload = data.GetBuffer();
+            int payloadLength = checked((int)data.Length);
+            var attachment = AttachmentItem.FromStream(
+                EmlReader.AttachmentName(entity, ++index),
+                () => new MemoryStream(payload, 0, payloadLength, writable: false),
+                payloadLength, entity.ContentType.MimeType);
+            attachment.ContentId = entity.ContentId;
+            attachment.IsInline = !entity.IsAttachment && !string.IsNullOrEmpty(entity.ContentId);
+            message.Attachments.Add(attachment);
         }
         if (preserveOriginal)
             message.Attachments.Add(new AttachmentItem { FileName = "원본.eml", Content = original, MimeType = "message/rfc822" });
@@ -114,7 +118,7 @@ internal sealed class LimitedMemoryStream(long limit) : MemoryStream
 {
     public override void Write(byte[] buffer, int offset, int count)
     {
-        if (Position + count > limit) throw new IOException("결과가 브라우저 처리 한도(300MB)를 초과했습니다. 파일을 나누어 변환하세요.");
+        if (Position + count > limit) throw new IOException("PST 한 개의 처리 한도(384MB)를 초과했습니다. 파일을 나누어 변환하세요.");
         base.Write(buffer, offset, count);
     }
 }

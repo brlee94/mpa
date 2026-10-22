@@ -183,10 +183,17 @@ async function run(browserType, name, launchOptions = {}) {
     const noOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
     check(`${name}: narrow viewport does not overflow`, () => assert.equal(noOverflow, true));
     await page.getByRole('button', { name: '모두 지우기' }).click();
-    await page.locator('#mail-files').setInputFiles([mail('large.eml', Buffer.alloc(26 * 1024 * 1024))]);
-    await page.getByRole('alert').filter({ hasText: '파일당 25MB' }).waitFor();
-    const oversizedDisabled = await page.getByRole('button', { name: 'PST로 변환하기' }).isDisabled();
-    check(`${name}: oversized input rejected`, () => assert.equal(oversizedDisabled, true));
+    const oversizedFolder = await fs.mkdtemp(path.join(os.tmpdir(), 'mpa-oversize-'));
+    try {
+      const oversized = path.join(oversizedFolder, 'too-large.eml');
+      const handle = await fs.open(oversized, 'w');
+      await handle.truncate(100 * 1024 * 1024 + 1);
+      await handle.close();
+      await page.locator('#mail-files').setInputFiles(oversized);
+      await page.getByRole('alert').filter({ hasText: '파일당 100MB' }).waitFor();
+      const oversizedDisabled = await page.getByRole('button', { name: 'PST로 변환하기' }).isDisabled();
+      check(`${name}: oversized input rejected`, () => assert.equal(oversizedDisabled, true));
+    } finally { await fs.rm(oversizedFolder, { recursive: true, force: true }); }
     await page.locator('#mail-files').setInputFiles(Array.from({ length: 250 }, (_, i) => mail(`cancel-${i}.eml`)));
     await page.getByRole('button', { name: 'PST로 변환하기' }).click();
     await page.getByRole('button', { name: '변환 중지', exact: true }).click();

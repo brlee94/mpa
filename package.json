@@ -2,7 +2,8 @@
   "name": "mpa-mail-tools",
   "private": true,
   "scripts": {
-    "test:web": "node tests/web/check.mjs"
+    "test:web": "node tests/web/check.mjs",
+    "test:web:large": "node tests/web/large.mjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"
