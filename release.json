@@ -1,4 +1,5 @@
 {
-  "version": "recovery-v4",
-  "path": "releases/recovery-v4/"
+  "version": "merge-v5",
+  "path": "releases/merge-v5/",
+  "runtimeModule": "./_framework/dotnet.q6hed6c203.js"
 }
