@@ -94,6 +94,8 @@ async function run(browserType, name, launchOptions = {}) {
   try {
     await page.goto(baseUrl);
     await page.locator('#mail-files:not([disabled])').waitFor({ timeout: 90_000 });
+    const version = await page.getByLabel('앱 버전', { exact: true }).innerText();
+    check(`${name}: visible release version identifies the running app`, () => assert.match(version, /버전 4/));
     const initiallyDisabled = await page.getByRole('button', { name: 'PST로 변환하기' }).isDisabled();
     check(`${name}: empty state does not enable conversion`, () => assert.equal(initiallyDisabled, true));
     await page.screenshot({ path: path.join(output, `${name}-desktop.png`), fullPage: true });
@@ -147,6 +149,8 @@ async function run(browserType, name, launchOptions = {}) {
     check(`${name}: failure report contains invalid source`, () => {
       assert.match(reportText, /invalid\.eml/);
       assert.match(reportText, /변환 실패/);
+      assert.match(reportText, /파일,결과,설명,원본 바이트,저장 PST,앱 버전/);
+      assert.match(reportText, /recovery-v4/);
     });
 
     await page.getByLabel('원본 EML 함께 보존').uncheck();
@@ -203,6 +207,9 @@ async function run(browserType, name, launchOptions = {}) {
     check(`${name}: mail never leaves the browser`, () => {
       assert.equal(requests.filter(r => r.method !== 'GET').length, 0);
       assert.equal(requests.filter(r => !r.url.startsWith(new URL(baseUrl).origin) && !r.url.startsWith('blob:')).length, 0);
+      const frameworkRequests = requests.filter(r => r.url.includes('/_framework/'));
+      assert(frameworkRequests.length > 0);
+      assert(frameworkRequests.every(r => r.url.startsWith(new URL('_framework/', baseUrl).href)), 'App assets escaped the release directory');
       assert.deepEqual(errors, []);
     });
   } catch (error) {

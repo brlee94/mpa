@@ -10,6 +10,7 @@
 <main>
     <section class="hero">
         <span class="eyebrow">EML TO PST · BROWSER EDITION</span>
+        <span class="app-version" aria-label="앱 버전">@AppVersion.Label · 메모리 최적화 · 이어서 변환</span>
         <h1>메일을 옮기는,<br /><span>가장 간단한 방법.</span></h1>
         <p>흩어진 EML 메일을 하나의 PST로 모으세요.<br class="mobile-break" /> 설치 없이, Windows와 Mac 어디서든.</p>
         <div class="hero-features"><span>↗&nbsp; 프로그램 설치 없이</span><span>◇&nbsp; 메일 업로드 없이</span><span>✓&nbsp; 본문과 첨부파일 그대로</span></div>
@@ -142,7 +143,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./converter.js?v=recovery-v3");
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", $"./converter.js?v={AppVersion.Id}");
         _directorySupported = await _module.InvokeAsync<bool>("canChooseDirectory");
         _ready = true;
         StateHasChanged();
@@ -422,8 +423,8 @@
 
     private async Task DownloadReport()
     {
-        string report = "파일,결과,설명,원본 바이트,저장 PST\r\n" + string.Join("\r\n", _files.Select(f =>
-            $"{ConversionReport.Escape(f.Path)},{ConversionReport.Escape(f.Status)},{ConversionReport.Escape(f.Error ?? "")},{f.File.Size},{ConversionReport.Escape(f.Output)}"));
+        string report = "파일,결과,설명,원본 바이트,저장 PST,앱 버전\r\n" + string.Join("\r\n", _files.Select(f =>
+            $"{ConversionReport.Escape(f.Path)},{ConversionReport.Escape(f.Status)},{ConversionReport.Escape(f.Error ?? "")},{f.File.Size},{ConversionReport.Escape(f.Output)},{ConversionReport.Escape(AppVersion.Id)}"));
         await _module!.InvokeVoidAsync("downloadReport", report);
     }
 

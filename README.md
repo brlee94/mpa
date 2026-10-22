@@ -4,6 +4,8 @@ Windows와 macOS의 **브라우저 안에서** EML을 Unicode PST로 변환합�
 
 ## 사용
 
+최신 복구 버전 전용 주소: **https://brlee94.github.io/mpa/releases/recovery-v4/**. 화면 상단에 **버전 4**가 표시됩니다. 루트 주소의 캐시와 분리한 전체 앱을 이 경로에 게시합니다. 새 보고서는 `앱 버전` 열에 `recovery-v4`를 기록합니다.
+
 1. 배포된 웹사이트에서 EML 파일을 드래그하거나 **폴더 선택**을 누릅니다.
 2. 결과 파일 이름과 원본 EML 첨부 여부를 선택합니다.
 3. 총 32MB 이하이면 **PST로 변환하기 → PST 저장하기**로 저장합니다. 총 32MB를 넘으면 **저장 폴더 선택** 후 변환하세요. 새 작업 폴더 안에 여러 PST가 차례로 저장됩니다.
@@ -42,13 +44,13 @@ Windows와 macOS의 **브라우저 안에서** EML을 Unicode PST로 변환합�
 
 ## 빌드
 
-개발할 때만 .NET SDK 10.0.402와 Node.js가 필요합니다. 사이트 사용자는 설치하지 않습니다.
+개발할 때만 .NET SDK 10.0.402, Node.js, Python 3가 필요합니다. 사이트 사용자는 설치하지 않습니다.
 
 ```bash
 bash scripts/publish-web.sh
 ```
 
-`artifacts/web/wwwroot`가 배포할 전체 정적 사이트입니다. 하위 경로(`/mpa/`)에서 동작하도록 상대 base URL을 사용합니다. `.nojekyll`을 포함해 `_framework` 디렉터리가 Pages에서 제외되지 않게 합니다. 잠금 파일은 일반 빌드와 브라우저 배포용을 구분합니다.
+`artifacts/web/wwwroot`가 배포할 전체 정적 사이트입니다. 게시 스크립트가 Python 3로 `AppVersion.Id`에 해당하는 `releases/<버전>/` 경로에도 모든 실행 파일을 복사합니다. 전용 주소는 루트의 이전 HTML·실행 파일 캐시와 분리되어 있으며, `release.json`에 게시 버전과 경로를 기록합니다. 새 배포는 새로운 버전 ID와 경로를 사용하세요. 하위 경로(`/mpa/`)에서 동작하도록 상대 base URL을 사용합니다. `.nojekyll`을 포함해 `_framework` 디렉터리가 Pages에서 제외되지 않게 합니다. 잠금 파일은 일반 빌드와 브라우저 배포용을 구분합니다.
 
 로컬 확인:
 

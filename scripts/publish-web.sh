@@ -6,3 +6,4 @@ dotnet publish src/EmlToPst.Web --configuration Release \
   --output artifacts/web --disable-build-servers -m:1
 touch artifacts/web/wwwroot/.nojekyll
 cp artifacts/web/wwwroot/index.html artifacts/web/wwwroot/404.html
+python3 scripts/package-web-release.py
