@@ -9,3 +9,5 @@
 
 .recovery-option { margin: 18px 0; padding: 16px; border: 1px solid var(--border, #dce3e1); border-radius: 12px; }
 .recovery-option p { font-size: 13px; line-height: 1.6; color: #596862; margin: 8px 0 12px; }
+
+.app-version { display: block; width: fit-content; max-width: 100%; margin: 10px auto 0; padding: 4px 12px; border-radius: 20px; color: var(--green); background: #eaf3ed; font-size: 11px; }
