@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+artifacts/
+*.pst
+*.ost
+*.eml
+*.eml.15
+*.conversion.csv
+.vs/
+node_modules/
+test-results/
+playwright-report/
+

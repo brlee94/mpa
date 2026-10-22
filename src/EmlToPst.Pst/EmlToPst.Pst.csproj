@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../EmlToPst.Core/EmlToPst.Core.csproj" />
+    <PackageReference Include="PstBuilder" Version="1.3.0" />
+  </ItemGroup>
+</Project>

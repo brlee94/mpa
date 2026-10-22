@@ -1,0 +1,271 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<header class="site-header">
+    <a href="." class="brand"><span class="brand-mark">m</span><span>mpa<span class="brand-caption">MAIL TOOLS</span></span></a>
+    <nav aria-label="주 메뉴"><a class="nav-active" href="#converter">메일 변환</a><a href="#guide">사용 안내</a></nav>
+    <span class="privacy-badge"><span class="status-dot"></span>내 PC에서 안전하게 처리</span>
+</header>
+
+<main>
+    <section class="hero">
+        <span class="eyebrow">EML TO PST · BROWSER EDITION</span>
+        <h1>메일을 옮기는,<br /><span>가장 간단한 방법.</span></h1>
+        <p>흩어진 EML 메일을 하나의 PST로 모으세요.<br class="mobile-break" /> 설치 없이, Windows와 Mac 어디서든.</p>
+        <div class="hero-features"><span>↗&nbsp; 프로그램 설치 없이</span><span>◇&nbsp; 메일 업로드 없이</span><span>✓&nbsp; 본문과 첨부파일 그대로</span></div>
+    </section>
+
+    <section class="workspace" id="converter" aria-label="메일 변환 작업">
+        <div class="source-card card">
+            <div class="card-heading"><div><span class="step-number">01</span><h2>변환할 메일 선택</h2></div><span class="format-chip">.eml → .pst</span></div>
+            <div class="drop-zone @(_busy ? "is-busy" : "")">
+                <InputFile id="mail-files" @key="_inputKey" OnChange="e => Select(e, false)" multiple accept=".eml,.eml.15,.15" disabled="@(!_ready || _busy)" aria-label="EML 파일 선택 또는 드래그" />
+                <div class="upload-icon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M16 22V5m0 0-6 6m6-6 6 6M6 21v5h20v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
+                <h3>메일 파일을 여기에 놓아주세요</h3><p>또는 클릭하여 EML 파일 선택</p><span class="upload-limit">최대 1,000개 · 총 100MB · 파일당 25MB</span>
+            </div>
+            <div class="folder-select"><span>폴더째 변환하고 싶다면</span><label class="folder-button"><span aria-hidden="true">▱</span> 폴더 선택<InputFile id="mail-folder" @key="_inputKey" OnChange="e => Select(e, true)" multiple webkitdirectory="" directory="" disabled="@(!_ready || _busy)" aria-label="EML 폴더 선택" /></label></div>
+
+            @if (_notice is not null)
+            {
+                <div class="notice @(_error ? "notice-error" : "")" role="@(_error ? "alert" : "status")">@_notice</div>
+            }
+
+            <div class="file-list-heading"><h3>선택한 메일 <span>@_files.Count</span></h3><button class="text-button" @onclick="Reset" disabled="@(_busy || _files.Count == 0)">모두 지우기</button></div>
+            @if (_files.Count == 0)
+            {
+                <div class="empty-state"><span aria-hidden="true">✉</span><p>아직 선택한 메일이 없습니다.</p><small>메일 파일을 선택하면 이곳에 표시됩니다.</small></div>
+            }
+            else
+            {
+                <div class="file-list" role="list" aria-label="선택한 메일 목록">
+                    @foreach (var file in _files)
+                    {
+                        <div class="file-row" role="listitem" @key="file">
+                            <span class="file-icon" aria-hidden="true">✉</span>
+                            <div class="file-info"><strong title="@file.Path">@file.Path</strong><small title="@file.Error">@(file.Error ?? file.Status)</small></div>
+                            <span class="file-size">@Size(file.File.Size)</span>
+                            <span class="file-state @file.State" aria-label="@file.Status">@(file.State == "success" ? "✓" : file.State == "failed" ? "!" : "·")</span>
+                            <button class="remove-button" aria-label="@($"{file.File.Name} 삭제")" disabled="@_busy" @onclick="() => Remove(file)">×</button>
+                        </div>
+                    }
+                </div>
+            }
+            <div class="local-note"><span aria-hidden="true">◇</span><p>선택한 메일은 서버로 전송되지 않습니다.<br />변환은 이 브라우저 안에서만 진행됩니다.</p></div>
+        </div>
+
+        <aside class="result-card card">
+            <div class="card-heading"><div><span class="step-number">02</span><h2>변환 설정</h2></div></div>
+            <label class="field-label" for="output-name">저장할 파일 이름</label>
+            <div class="filename-field"><input id="output-name" maxlength="100" @bind="_outputName" @bind:event="oninput" disabled="@_busy" /><span>.pst</span></div>
+            <label class="option"><input type="checkbox" @bind="_preserveOriginal" disabled="@_busy" /><span><strong>원본 EML 함께 보존</strong><small>각 메일에 원본을 첨부합니다.<br />결과 파일 용량이 늘어납니다.</small></span></label>
+            <div class="summary"><div><span>선택한 메일</span><strong>@_files.Count.ToString("N0")<small> 개</small></strong></div><div><span>원본 전체 용량</span><strong>@Size(TotalSize)</strong></div><div><span>결과 형식</span><strong>Outlook PST <span class="unicode-badge">Unicode</span></strong></div></div>
+            @if (_busy)
+            {
+                <div class="progress-label" role="status"><span>@_stage</span><strong>@_processed / @_files.Count</strong></div>
+                <progress max="@Math.Max(1, _files.Count)" value="@_processed" aria-label="변환 진행률"></progress>
+                <button class="secondary-button full-width" @onclick="Cancel" disabled="@_cancelRequested">@(_cancelRequested ? "중지하는 중…" : "변환 중지")</button>
+            }
+            else if (_downloadUrl is not null)
+            {
+                <div class="success-note" role="status"><strong>변환이 완료되었습니다.</strong><span>성공 @_succeeded 개 · 실패 @_failed 개</span><span>@Size(_resultSize) · @_resultName</span></div>
+                <a class="primary-button full-width" href="@_downloadUrl" download="@_resultName">PST 저장하기 <span aria-hidden="true">↓</span></a>
+                <button class="text-button report-button" @onclick="DownloadReport">변환 보고서 저장</button>
+                <button class="secondary-button full-width" @onclick="Convert">설정 바꿔 다시 변환</button>
+            }
+            else
+            {
+                <button class="primary-button full-width" @onclick="Convert" disabled="@(!_ready || _files.Count == 0 || string.IsNullOrWhiteSpace(_outputName))">PST로 변환하기 <span aria-hidden="true">→</span></button>
+            }
+            <p class="result-help">프로그램을 받을 필요 없이<br />변환된 PST 파일만 저장하세요.</p>
+            <div class="compatibility"><span>사용 가능한 환경</span><strong>Windows & macOS</strong><small>권장 브라우저: 최신 Chrome · Edge</small></div>
+        </aside>
+    </section>
+
+    <section class="guide" id="guide">
+        <div class="section-title"><span class="eyebrow">HOW IT WORKS</span><h2>세 단계면 충분합니다.</h2></div>
+        <div class="guide-grid"><article><span>01</span><h3>EML을 선택하세요</h3><p>여러 파일을 놓거나 폴더를 선택하세요.<br />폴더를 선택하면 하위 구조도 유지합니다.</p></article><article><span>02</span><h3>브라우저에서 변환합니다</h3><p>메일을 업로드하지 않고 변환합니다.<br />Outlook을 설치할 필요도 없습니다.</p></article><article><span>03</span><h3>PST를 저장하세요</h3><p>변환된 PST를 PC에 저장하세요.<br />PST를 지원하는 앱에서 열 수 있습니다.</p></article></div>
+        <details><summary>지원 범위와 참고사항</summary><div class="details-body"><p><code>Outlook.File.eml.15</code>로 표시되는 일반 EML과 .eml.15 파일을 지원합니다. 메일 본문, 보낸 사람, 수신자, 날짜, 일반 첨부 및 인라인 이미지를 보존하며, 기본 설정으로 원본 EML을 함께 첨부합니다.</p><p>암호화된 S/MIME 복호화, winmail.dat 내부 추출, 원래의 읽음 상태 복원은 지원하지 않습니다. 결과는 읽음 상태로 저장합니다. 브라우저 메모리를 사용하므로 대용량 작업은 나누어 처리하세요. 변환 중에는 탭을 닫지 마세요.</p><p>Windows·Mac은 변환 환경을 뜻합니다. 변환된 PST를 열려면 PST 가져오기를 지원하는 앱이 필요하며, Mac용 새 Outlook은 PST 가져오기를 지원하지 않을 수 있습니다. 생성 엔진의 특성상 Outlook 검사 도구에서 메시지 크기·검색 폴더 관련 안내가 표시될 수 있습니다.</p><p>오류가 있는 EML은 보고서에 기록하고 제외합니다. 저장 중 오류가 발생하거나 중지하면 결과를 내보내지 않습니다. 원본 파일은 변경하지 않습니다.</p></div></details>
+    </section>
+    <footer><a href="." class="footer-brand">mpa<span>MAIL TOOLS</span></a><p>당신의 메일은 당신의 브라우저에.</p><a href="licenses.txt" target="_blank" rel="noopener">오픈소스 라이선스 ↗</a></footer>
+</main>
+
+@code {
+    private sealed class MailFile(IBrowserFile file, string path)
+    {
+        public IBrowserFile File { get; } = file;
+        public string Path { get; } = path;
+        public string State { get; set; } = "pending";
+        public string Status { get; set; } = "변환 대기";
+        public string? Error { get; set; }
+    }
+    private sealed record DownloadInfo(string Url, long Size);
+    private readonly List<MailFile> _files = [];
+    private IJSObjectReference? _module;
+    private bool _ready, _busy, _error, _cancelRequested;
+    private bool _preserveOriginal = true;
+    private string _outputName = "가져온메일";
+    private string? _notice, _downloadUrl;
+    private string _resultName = "", _stage = "메일을 읽고 있습니다";
+    private int _inputKey, _processed, _succeeded, _failed;
+    private long _resultSize;
+    private long TotalSize => _files.Sum(f => f.File.Size);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./converter.js");
+        _ready = true;
+        StateHasChanged();
+    }
+
+    private async Task ClearResult()
+    {
+        if (_module is not null) await _module.InvokeVoidAsync("releaseDownload");
+        _downloadUrl = null;
+        _resultSize = 0;
+    }
+
+    private async Task Select(InputFileChangeEventArgs args, bool folder)
+    {
+        if (_busy || !_ready) return;
+        await ClearResult();
+        _files.Clear();
+        _notice = null;
+        _error = false;
+        _processed = _succeeded = _failed = 0;
+        if (args.FileCount > PstArchive.MaxFiles) { Fail("한 번에 1,000개까지 선택할 수 있습니다. 폴더를 나누어 선택해 주세요."); return; }
+        var selected = args.GetMultipleFiles(PstArchive.MaxFiles);
+        var paths = await _module!.InvokeAsync<string[]>("paths", folder ? "mail-folder" : "mail-files");
+        int ignored = 0;
+        for (int i = 0; i < selected.Count; i++)
+        {
+            if (!EmlReader.IsEml(selected[i].Name)) { ignored++; continue; }
+            if (selected[i].Size > PstArchive.MaxFileBytes)
+            {
+                _files.Clear();
+                Fail($"{selected[i].Name}: 파일당 25MB 한도를 초과합니다. 더 작은 파일을 선택해 주세요.");
+                return;
+            }
+            _files.Add(new(selected[i], i < paths.Length ? paths[i] : selected[i].Name));
+        }
+        if (TotalSize > PstArchive.MaxInputBytes) { _files.Clear(); Fail("전체 용량이 100MB를 초과합니다. 파일을 나누어 변환해 주세요."); return; }
+        if (_files.Count == 0) { Fail("선택한 항목에서 EML 파일을 찾지 못했습니다."); return; }
+        if (ignored > 0) _notice = $"EML이 아닌 파일 {ignored:N0}개를 제외했습니다.";
+    }
+
+    private async Task Reset()
+    {
+        if (_busy) return;
+        await ClearResult();
+        _files.Clear();
+        _notice = null;
+        _error = false;
+        _processed = _succeeded = _failed = 0;
+        _inputKey++;
+    }
+
+    private async Task Remove(MailFile file)
+    {
+        await ClearResult();
+        _files.Remove(file);
+        _notice = null;
+        _error = false;
+    }
+
+    private void Fail(string text) { _notice = text; _error = true; }
+    private void Cancel() { _cancelRequested = true; _stage = "현재 메일을 마치고 중지합니다"; }
+
+    private async Task Convert()
+    {
+        if (_busy || _files.Count == 0) return;
+        _busy = true;
+        _cancelRequested = false;
+        _notice = null;
+        _error = false;
+        _processed = _succeeded = _failed = 0;
+        foreach (var file in _files) { file.State = "pending"; file.Status = "변환 대기"; file.Error = null; }
+        try
+        {
+            await ClearResult();
+            await _module!.InvokeVoidAsync("confirmLeave", true);
+            await Task.Delay(30);
+            using var archive = new PstArchive();
+            foreach (var file in _files)
+            {
+                if (_cancelRequested) break;
+                _stage = "메일과 첨부파일을 변환하는 중";
+                PstBuilder.Messaging.MessageItem? message = null;
+                try
+                {
+                    await using var source = file.File.OpenReadStream(PstArchive.MaxFileBytes);
+                    using var data = new MemoryStream();
+                    await source.CopyToAsync(data);
+                    message = PstArchive.Prepare(data.ToArray(), _preserveOriginal);
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    file.State = "failed";
+                    file.Status = "변환 실패";
+                    file.Error = ex.Message;
+                    _failed++;
+                }
+                if (message is not null)
+                {
+                    // Writer failures are fatal: never export a partially damaged PST.
+                    var segments = file.Path.Replace('\\', '/').Split('/');
+                    string folderPath = string.Join('/', segments.SkipLast(1));
+                    archive.Add(message, folderPath);
+                    file.State = "success";
+                    file.Status = "변환 완료";
+                    _succeeded++;
+                }
+                _processed++;
+                StateHasChanged();
+                await Task.Delay(1);
+            }
+            if (_cancelRequested) { Fail("변환을 중지했습니다. 결과 파일은 생성하지 않았습니다. 원본은 그대로 보존됩니다."); return; }
+            if (_succeeded == 0) { Fail("변환 가능한 메일이 없습니다. 파일별 오류를 확인하고 올바른 EML을 다시 선택해 주세요."); return; }
+            _stage = "PST 파일을 마무리하는 중";
+            StateHasChanged();
+            await Task.Delay(30);
+            var result = archive.Complete();
+            using var reference = new DotNetStreamReference(result, leaveOpen: true);
+            var download = await _module!.InvokeAsync<DownloadInfo>("prepareDownload", reference);
+            _downloadUrl = download.Url;
+            _resultSize = download.Size;
+            string name = new(_outputName.Trim().Select(c => c < 32 || "<>:\"/\\|?*".Contains(c) ? '_' : c).ToArray());
+            name = name.TrimEnd(' ', '.');
+            if (name.EndsWith(".pst", StringComparison.OrdinalIgnoreCase)) name = name[..^4];
+            _resultName = (string.IsNullOrWhiteSpace(name) ? "가져온메일" : name) + ".pst";
+            _notice = _failed > 0 ? $"{_failed:N0}개의 메일을 제외하고 변환했습니다. 변환 보고서에서 실패 이유를 확인하세요." : null;
+            _error = _failed > 0;
+        }
+        catch (Exception ex)
+        {
+            await ClearResult();
+            Fail("PST를 생성하지 못했습니다. 파일 수를 줄여 다시 시도해 주세요. " + ex.Message);
+        }
+        finally
+        {
+            _busy = false;
+            await _module!.InvokeVoidAsync("confirmLeave", false);
+        }
+    }
+
+    private async Task DownloadReport()
+    {
+        static string Csv(string text)
+        {
+            if (text.Length > 0 && "=+-@\t\r\n".Contains(text[0])) text = "'" + text;
+            return "\"" + text.Replace("\"", "\"\"") + "\"";
+        }
+        string report = "파일,결과,설명\r\n" + string.Join("\r\n", _files.Select(f => $"{Csv(f.Path)},{Csv(f.Status)},{Csv(f.Error ?? "")}"));
+        await _module!.InvokeVoidAsync("downloadReport", report);
+    }
+
+    private static string Size(long bytes) => bytes >= 1024 * 1024 ? $"{bytes / 1024d / 1024:N1} MB" : bytes >= 1024 ? $"{bytes / 1024d:N1} KB" : $"{bytes} B";
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null) { await _module.InvokeVoidAsync("releaseDownload"); await _module.InvokeVoidAsync("confirmLeave", false); await _module.DisposeAsync(); }
+    }
+}
