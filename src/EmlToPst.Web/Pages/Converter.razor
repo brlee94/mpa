@@ -50,6 +50,10 @@
                     }
                 </div>
             }
+            @if (_files.Count > 0)
+            {
+                <div class="recovery-option"><strong>중단된 작업 이어서 변환</strong><p>이전과 동일한 EML 전체를 선택한 뒤 변환결과.csv를 불러오세요. 저장 완료 메일은 제외합니다.</p><label class="folder-button">이전 보고서 불러오기<InputFile id="resume-report" OnChange="ImportReport" accept=".csv" disabled="@_busy" aria-label="이전 변환 보고서 선택" /></label></div>
+            }
             <div class="local-note"><span aria-hidden="true">◇</span><p>선택한 메일은 서버로 전송되지 않습니다.<br />변환은 이 브라우저 안에서만 진행됩니다.</p></div>
         </div>
 
@@ -60,7 +64,7 @@
             <label class="option"><input type="checkbox" @bind="_preserveOriginal" disabled="@_busy" /><span><strong>원본 EML 함께 보존</strong><small>각 메일에 원본을 첨부합니다.<br />결과 파일 용량이 늘어납니다.</small></span></label>
             <div class="directory-option">
                 <strong>대용량·분할 저장</strong>
-                <p>총 100MB를 넘으면 저장 폴더를 선택하세요. 원본 약 100MB씩 나누어 PST로 바로 저장합니다.</p>
+                <p>총 32MB를 넘으면 저장 폴더를 선택하세요. 원본 약 32MB 또는 64개씩 나누어 PST로 저장하고 메모리를 비웁니다. 큰 메일 한 개는 별도 PST로 저장합니다.</p>
                 <button class="secondary-button full-width" @onclick="ChooseDirectory" disabled="@(!_ready || _busy || !_directorySupported)">@(_directoryReady ? "저장 폴더 변경" : "저장 폴더 선택")</button>
                 @if (_directoryReady) { <small>선택한 폴더: @_directoryName</small> }
                 else if (_ready && !_directorySupported) { <small>대용량 저장은 Windows·Mac의 최신 Chrome/Edge에서 지원합니다.</small> }
@@ -75,9 +79,11 @@
             }
             else if (_savedParts.Count > 0)
             {
-                <div class="success-note" role="status"><strong>@(_runComplete ? "폴더에 저장이 완료되었습니다." : "완료된 PST는 보존되었습니다.")</strong><span>저장 @_succeeded 개 · 실패 @_failed 개 · PST @_savedParts.Count 개</span><span>@_outputLocation</span></div>
+                <div class="success-note" role="status"><strong>@(_runComplete ? "폴더에 저장이 완료되었습니다." : "완료된 PST는 보존되었습니다.")</strong><span>누적 저장 @_succeeded 개 · 미저장 @(_files.Count - _succeeded) 개 · 이번 PST @_savedParts.Count 개</span><span>@_outputLocation</span></div>
                 <ul class="saved-parts" aria-label="저장된 PST 목록">@foreach (var part in _savedParts) { <li><span>@part.Name</span><small>@Size(part.Size) · @part.Count 개</small></li> }</ul>
                 <button class="text-button report-button" @onclick="DownloadReport">변환 보고서 저장</button>
+                @if (_files.Any(f => f.State != "success") && _savedParts.Count > 0)
+                { <button class="primary-button full-width" @onclick="RetryRemaining">미저장 메일만 다시 변환</button> }
                 <button class="secondary-button full-width" @onclick="Convert">설정 바꿔 다시 변환</button>
             }
             else if (_downloadUrl is not null)
@@ -89,7 +95,7 @@
             }
             else
             {
-                <button class="primary-button full-width" @onclick="Convert" disabled="@(!_ready || _files.Count == 0 || string.IsNullOrWhiteSpace(_outputName) || (NeedsDirectory && !_directoryReady))">PST로 변환하기 <span aria-hidden="true">→</span></button>
+                <button class="primary-button full-width" @onclick="Convert" disabled="@(!_ready || _files.Count == 0 || string.IsNullOrWhiteSpace(_outputName) || (NeedsDirectory && !_directoryReady))">@(_resumeLoaded ? "완료 제외하고 변환하기" : "PST로 변환하기") <span aria-hidden="true">→</span></button>
                 @if (_processed > 0) { <button class="text-button report-button" @onclick="DownloadReport">변환 보고서 저장</button> }
             }
             <p class="result-help">프로그램을 받을 필요 없이<br />변환된 PST 파일만 저장하세요.<br />분할 저장 시 완료된 PST부터 폴더에 남습니다.</p>
@@ -100,7 +106,7 @@
     <section class="guide" id="guide">
         <div class="section-title"><span class="eyebrow">HOW IT WORKS</span><h2>세 단계면 충분합니다.</h2></div>
         <div class="guide-grid"><article><span>01</span><h3>EML을 선택하세요</h3><p>여러 파일을 놓거나 폴더를 선택하세요.<br />폴더를 선택하면 하위 구조도 유지합니다.</p></article><article><span>02</span><h3>브라우저에서 변환합니다</h3><p>메일을 업로드하지 않고 변환합니다.<br />Outlook을 설치할 필요도 없습니다.</p></article><article><span>03</span><h3>PST를 저장하세요</h3><p>변환된 PST를 PC에 저장하세요.<br />PST를 지원하는 앱에서 열 수 있습니다.</p></article></div>
-        <details><summary>지원 범위와 참고사항</summary><div class="details-body"><p><code>Outlook.File.eml.15</code>로 표시되는 일반 EML과 .eml.15 파일을 지원합니다. 메일 본문, 보낸 사람, 수신자, 날짜, 일반 첨부 및 인라인 이미지를 보존하며, 기본 설정으로 원본 EML을 함께 첨부합니다.</p><p>파일당 100MB, 전체 4GB까지 선택할 수 있습니다. 총 100MB 초과 시 최신 Chrome/Edge에서 저장 폴더를 선택하면 원본 약 100MB 단위의 여러 PST로 저장합니다. 실제 PST 용량은 첨부·원본 보존 여부에 따라 달라집니다. 단일 4GB PST를 생성하지 않습니다. 브라우저에 작업 폴더의 쓰기 권한을 허용하고 충분한 디스크 공간을 확보하세요.</p><p>암호화된 S/MIME 복호화, winmail.dat 내부 추출, 원래의 읽음 상태 복원은 지원하지 않습니다. 결과는 읽음 상태로 저장합니다. 변환 중에는 탭을 닫지 마세요.</p><p>Windows·Mac은 변환 환경을 뜻합니다. 변환된 PST를 열려면 PST 가져오기를 지원하는 앱이 필요하며, Mac용 새 Outlook은 PST 가져오기를 지원하지 않을 수 있습니다. 생성 엔진의 특성상 Outlook 검사 도구에서 메시지 크기·검색 폴더 관련 안내가 표시될 수 있습니다.</p><p>오류가 있는 EML은 보고서에 기록하고 제외합니다. 중지하거나 오류가 생기면 아직 저장하지 않은 PST는 폐기하고, 폴더에 저장이 끝난 PST는 보존합니다. 원본 파일과 기존 결과는 변경하지 않습니다.</p></div></details>
+        <details><summary>지원 범위와 참고사항</summary><div class="details-body"><p><code>Outlook.File.eml.15</code>로 표시되는 일반 EML과 .eml.15 파일을 지원합니다. 메일 본문, 보낸 사람, 수신자, 날짜, 일반 첨부 및 인라인 이미지를 보존하며, 기본 설정으로 원본 EML을 함께 첨부합니다.</p><p>파일당 100MB, 전체 4GB까지 선택할 수 있습니다. 총 32MB 초과 시 최신 Chrome/Edge에서 저장 폴더를 선택하면 원본 약 32MB 또는 64개 단위의 여러 PST로 저장합니다. 파일 하나를 쪼개지는 않습니다. 실제 PST 용량은 첨부·원본 보존 여부에 따라 달라집니다. 단일 4GB PST를 생성하지 않습니다. 브라우저에 작업 폴더의 쓰기 권한을 허용하고 충분한 디스크 공간을 확보하세요.</p><p>암호화된 S/MIME 복호화, winmail.dat 내부 추출, 원래의 읽음 상태 복원은 지원하지 않습니다. 결과는 읽음 상태로 저장합니다. 변환 중에는 탭을 닫지 마세요.</p><p>Windows·Mac은 변환 환경을 뜻합니다. 변환된 PST를 열려면 PST 가져오기를 지원하는 앱이 필요하며, Mac용 새 Outlook은 PST 가져오기를 지원하지 않을 수 있습니다. 생성 엔진의 특성상 Outlook 검사 도구에서 메시지 크기·검색 폴더 관련 안내가 표시될 수 있습니다.</p><p>오류가 있는 EML은 보고서에 기록하고 제외합니다. 중지하거나 오류가 생기면 아직 저장하지 않은 PST는 폐기하고, 폴더에 저장이 끝난 PST는 보존합니다. 원본 파일과 기존 결과는 변경하지 않습니다.</p></div></details>
     </section>
     <footer><a href="." class="footer-brand">mpa<span>MAIL TOOLS</span></a><p>당신의 메일은 당신의 브라우저에.</p><a href="licenses.txt" target="_blank" rel="noopener">오픈소스 라이선스 ↗</a></footer>
 </main>
@@ -113,13 +119,15 @@
         public string State { get; set; } = "pending";
         public string Status { get; set; } = "변환 대기";
         public string? Error { get; set; }
+        public string Output { get; set; } = "";
     }
     private sealed record DownloadInfo(string Url, long Size);
     private sealed record SavedPart(string Name, long Size, int Count);
     private readonly List<MailFile> _files = [];
     private readonly List<SavedPart> _savedParts = [];
     private IJSObjectReference? _module;
-    private bool _ready, _busy, _error, _cancelRequested;
+    private bool _ready, _busy, _error, _cancelRequested, _resumeLoaded;
+    private string? _activeFile;
     private bool _preserveOriginal = true;
     private string _outputName = "가져온메일";
     private string? _notice, _downloadUrl;
@@ -134,7 +142,7 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./converter.js?v=large-v2");
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./converter.js?v=recovery-v3");
         _directorySupported = await _module.InvokeAsync<bool>("canChooseDirectory");
         _ready = true;
         StateHasChanged();
@@ -142,7 +150,7 @@
 
     private async Task ClearResult()
     {
-        if (_module is not null) await _module.InvokeVoidAsync("releaseDownload");
+        if (_module is not null) await _module!.InvokeVoidAsync("releaseDownload");
         _downloadUrl = null;
         _resultSize = 0;
         _savedParts.Clear();
@@ -158,6 +166,7 @@
         _notice = null;
         _error = false;
         _processed = _succeeded = _failed = 0;
+        _resumeLoaded = false;
         if (args.FileCount > PstArchive.MaxFiles) { Fail("한 번에 1,000개까지 선택할 수 있습니다. 폴더를 나누어 선택해 주세요."); return; }
         var selected = args.GetMultipleFiles(PstArchive.MaxFiles);
         var paths = await _module!.InvokeAsync<string[]>("paths", folder ? "mail-folder" : "mail-files");
@@ -186,6 +195,7 @@
         _notice = null;
         _error = false;
         _processed = _succeeded = _failed = 0;
+        _resumeLoaded = false;
         _inputKey++;
     }
 
@@ -211,12 +221,28 @@
         catch (JSException ex) { Fail("저장 폴더를 선택하지 못했습니다. " + ex.Message); }
     }
 
-    private async Task<PstBuilder.Messaging.MessageItem> ReadMessage(MailFile file)
+    // Keep MIME/attachment objects inside one call so they cannot be captured across a UI await.
+    private bool AddMail(PstArchive archive, MailFile file, byte[] data)
+    {
+        PstBuilder.Messaging.MessageItem message;
+        try { message = PstArchive.Prepare(data, _preserveOriginal); }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            file.State = "failed"; file.Status = "변환 실패"; file.Error = ex.Message; _failed++;
+            return false;
+        }
+        var segments = file.Path.Replace('\\', '/').Split('/');
+        // A writer error is fatal for this part; continuing could publish a corrupt PST.
+        archive.Add(message, string.Join('/', segments.SkipLast(1)));
+        return true;
+    }
+
+    private async Task<bool> ReadAndAdd(PstArchive archive, MailFile file)
     {
         await using var source = file.File.OpenReadStream(PstArchive.MaxFileBytes);
         byte[] data = new byte[checked((int)file.File.Size)];
         await source.ReadExactlyAsync(data);
-        return PstArchive.Prepare(data, _preserveOriginal);
+        return AddMail(archive, file, data);
     }
 
     private async Task FinishPart(PstArchive archive, List<MailFile> staged, bool disk, string baseName)
@@ -226,92 +252,111 @@
         await Task.Delay(1);
         var result = archive.Complete();
         long length = result.Length;
-        using var reference = new DotNetStreamReference(result, leaveOpen: true);
+        string filename;
         if (disk)
         {
-            string filename = $"{baseName}-{_savedParts.Count + 1:000}.pst";
-            await _module!.InvokeVoidAsync("savePart", reference, filename);
+            filename = $"{baseName}-{_savedParts.Count + 1:000}.pst";
+            try
+            {
+                await _module!.InvokeVoidAsync("openPart", filename);
+                byte[] chunk = new byte[256 * 1024];
+                int count;
+                while ((count = result.Read(chunk, 0, chunk.Length)) > 0)
+                {
+                    // The next block is sent only after the previous disk write completes.
+                    if (count == chunk.Length) await _module!.InvokeVoidAsync("writePartChunk", chunk);
+                    else await _module!.InvokeVoidAsync("writePartChunk", chunk[..count]);
+                }
+                await _module!.InvokeVoidAsync("closePart");
+            }
+            catch
+            {
+                await _module!.InvokeVoidAsync("abortPart");
+                throw;
+            }
             _savedParts.Add(new(filename, length, staged.Count));
             _resultSize += length;
         }
         else
         {
+            using var reference = new DotNetStreamReference(result, leaveOpen: true);
             var download = await _module!.InvokeAsync<DownloadInfo>("prepareDownload", reference);
             _downloadUrl = download.Url;
             _resultSize = download.Size;
-            _resultName = baseName + ".pst";
+            _resultName = filename = baseName + ".pst";
         }
-        foreach (var file in staged) { file.State = "success"; file.Status = disk ? "PST 저장 완료" : "변환 완료"; }
+        foreach (var file in staged)
+        {
+            file.State = "success"; file.Status = disk ? "PST 저장 완료" : "변환 완료";
+            file.Error = null; file.Output = disk ? _outputLocation + "/" + filename : filename;
+        }
         _succeeded += staged.Count;
     }
 
-    private async Task Convert()
+    private Task Convert() => Run(_resumeLoaded);
+    private Task RetryRemaining() => Run(true);
+
+    private async Task Run(bool resume)
     {
         if (_busy || _files.Count == 0) return;
-        if (NeedsDirectory && !_directoryReady) { Fail("100MB를 초과하는 작업은 먼저 저장 폴더를 선택해 주세요."); return; }
-        _busy = true;
-        _cancelRequested = false;
-        _notice = null;
-        _error = false;
-        _processed = _succeeded = _failed = 0;
+        if (NeedsDirectory && !_directoryReady) { Fail("32MB를 초과하는 작업은 먼저 저장 폴더를 선택해 주세요."); return; }
+        var pending = _files.Where(f => !resume || f.State != "success").ToList();
+        if (pending.Count == 0) { Fail("모든 메일이 이미 저장 완료로 기록되어 있습니다."); return; }
+        _busy = true; _cancelRequested = false; _notice = null; _error = false;
+        _processed = _succeeded = _files.Count - pending.Count;
+        _failed = 0;
         bool disk = _directoryReady;
         string baseName = new(_outputName.Trim().Select(c => c < 32 || "<>:\"/\\|?*".Contains(c) ? '_' : c).ToArray());
         baseName = baseName.TrimEnd(' ', '.');
         if (baseName.EndsWith(".pst", StringComparison.OrdinalIgnoreCase)) baseName = baseName[..^4];
         if (string.IsNullOrWhiteSpace(baseName)) baseName = "가져온메일";
-        foreach (var file in _files) { file.State = "pending"; file.Status = "변환 대기"; file.Error = null; }
+        foreach (var file in pending) { file.State = "pending"; file.Status = "변환 대기"; file.Error = null; file.Output = ""; }
+        _resumeLoaded = false;
         PstArchive? archive = null;
         var staged = new List<MailFile>();
-        long partInput = 0;
+        long partInput = 0, sinceCollection = 0;
+        int sinceCollectionCount = 0;
+        string? stoppedReason = null;
         try
         {
             await ClearResult();
             await _module!.InvokeVoidAsync("confirmLeave", true);
             if (disk) _outputLocation = await _module!.InvokeAsync<string>("beginDirectoryRun", baseName);
+            GC.Collect();
             await Task.Delay(30);
-            foreach (var file in _files)
+            foreach (var file in pending)
             {
                 if (_cancelRequested) break;
-                if (archive is not null && staged.Count > 0 && partInput + file.File.Size > PstArchive.MaxPartInputBytes)
+                if (archive is not null && staged.Count > 0 && disk &&
+                    (partInput + file.File.Size > PstArchive.MaxPartInputBytes || staged.Count >= PstArchive.MaxPartFiles))
                 {
                     await FinishPart(archive, staged, disk, baseName);
-                    archive.Dispose();
-                    archive = null;
-                    staged.Clear();
-                    partInput = 0;
-                    StateHasChanged();
-                    await Task.Delay(1);
+                    archive.Dispose(); archive = null; staged.Clear(); partInput = 0;
+                    // WASM linear memory stays reserved, but the GC can reuse these freed blocks.
+                    GC.Collect();
+                    sinceCollection = 0; sinceCollectionCount = 0;
+                    StateHasChanged(); await Task.Delay(1);
                     if (_cancelRequested) break;
                 }
+                _activeFile = file.Path;
                 _stage = "메일과 첨부파일을 변환하는 중";
-                PstBuilder.Messaging.MessageItem? message = null;
-                try { message = await ReadMessage(file); }
-                catch (Exception ex) when (ex is not OutOfMemoryException)
+                archive ??= new PstArchive();
+                if (await ReadAndAdd(archive, file))
                 {
-                    file.State = "failed";
-                    file.Status = "변환 실패";
-                    file.Error = ex.Message;
-                    _failed++;
-                }
-                if (message is not null)
-                {
-                    archive ??= new PstArchive();
-                    var segments = file.Path.Replace('\\', '/').Split('/');
-                    string folderPath = string.Join('/', segments.SkipLast(1));
-                    // Writer failures discard only this unsaved part, never an already saved PST.
-                    archive.Add(message, folderPath);
-                    message = null;
-                    staged.Add(file);
-                    partInput += file.File.Size;
-                    file.State = "staged";
-                    file.Status = "PST 저장 대기";
+                    staged.Add(file); partInput += file.File.Size;
+                    file.State = "staged"; file.Status = "PST 저장 대기";
                 }
                 _processed++;
-                StateHasChanged();
-                await Task.Delay(1);
+                sinceCollection += file.File.Size; sinceCollectionCount++;
+                if (sinceCollection >= 8L * 1024 * 1024 || sinceCollectionCount >= 16)
+                {
+                    GC.Collect(); sinceCollection = 0; sinceCollectionCount = 0;
+                }
+                StateHasChanged(); await Task.Delay(1);
             }
             if (_cancelRequested)
             {
+                stoppedReason = "사용자가 변환 중지 요청";
                 Fail(_savedParts.Count > 0
                     ? $"변환을 중지했습니다. 저장된 PST {_savedParts.Count}개는 폴더에 보존되며, 아직 저장하지 않은 메일은 제외했습니다."
                     : "변환을 중지했습니다. 결과 파일은 생성하지 않았습니다. 원본은 그대로 보존됩니다.");
@@ -325,37 +370,66 @@
         }
         catch (Exception ex)
         {
-            await _module!.InvokeVoidAsync("releaseDownload");
-            _downloadUrl = null;
-            Fail("작업을 완료하지 못했습니다. " + ex.Message + (_savedParts.Count > 0 ? $" 이미 저장된 PST {_savedParts.Count}개는 폴더에 보존됩니다." : ""));
+            stoppedReason = $"{_stage}: {ex.GetType().Name}: {ex.Message}";
+            if (_activeFile is not null) stoppedReason += $" (처리 중: {_activeFile})";
+            await _module!.InvokeVoidAsync("releaseDownload"); _downloadUrl = null;
+            string reason = (ex is OutOfMemoryException || ex.Message.Contains("out of memory", StringComparison.OrdinalIgnoreCase)) ? "브라우저 메모리가 부족합니다. 다른 탭을 닫은 뒤 미저장 메일만 다시 변환해 주세요." : ex.Message;
+            Fail("작업을 완료하지 못했습니다. " + reason + (_savedParts.Count > 0 ? $" 이미 저장된 PST {_savedParts.Count}개는 폴더에 보존됩니다." : ""));
         }
         finally
         {
-            archive?.Dispose();
-            foreach (var file in _files.Where(f => f.State is "staged" or "pending"))
+            archive?.Dispose(); archive = null;
+            foreach (var file in pending.Where(f => f.State is "staged" or "pending"))
             {
-                file.State = "pending";
-                file.Status = "저장되지 않음";
+                file.Status = file.State == "staged" ? "저장되지 않음" : "미처리";
+                file.State = "pending"; file.Error = stoppedReason ?? "작업이 완료되지 않았습니다.";
             }
-            _busy = false;
+            staged.Clear(); GC.Collect();
+            _activeFile = null; _busy = false;
             await _module!.InvokeVoidAsync("confirmLeave", false);
         }
     }
 
+    private async Task ImportReport(InputFileChangeEventArgs args)
+    {
+        if (_busy || _files.Count == 0) return;
+        try
+        {
+            await using var stream = args.File.OpenReadStream(2 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            var entries = ConversionReport.Read(await reader.ReadToEndAsync());
+            var selected = _files.ToDictionary(f => f.Path, StringComparer.Ordinal);
+            // Require the same complete selection. No basename-only or positional matching.
+            if (entries.Count != selected.Count || entries.Any(e => !selected.TryGetValue(e.Path, out var f) || (e.Size is not null && e.Size != f.File.Size)))
+                throw new FormatException("보고서와 선택한 메일의 전체 경로·개수·크기가 일치하지 않습니다. 이전과 동일한 파일 또는 폴더를 선택해 주세요.");
+            int saved = entries.Count(e => e.Saved);
+            if (saved == 0) throw new FormatException("보고서에 ‘PST 저장 완료’로 기록된 메일이 없습니다.");
+            await ClearResult();
+            foreach (var entry in entries)
+            {
+                var file = selected[entry.Path];
+                file.State = entry.Saved ? "success" : "pending";
+                file.Status = entry.Saved ? "이전 PST 저장 완료" : "변환 대기";
+                file.Error = null; file.Output = entry.Saved ? (entry.Output == "" ? "이전 작업의 PST" : entry.Output) : "";
+            }
+            _processed = _succeeded = saved; _failed = 0; _resumeLoaded = true;
+            _notice = $"보고서의 저장 완료 {saved:N0}개를 제외하고 {_files.Count - saved:N0}개만 변환합니다. 기존 PST도 함께 보관하세요." +
+                (entries.Any(e => e.Size is null) ? " 이전 형식 보고서는 파일명·경로로 대조하므로 동일한 원본을 선택했는지 확인하세요." : "");
+            _error = false;
+        }
+        catch (Exception ex) { Fail("보고서를 적용하지 못했습니다. " + ex.Message); }
+    }
+
     private async Task DownloadReport()
     {
-        static string Csv(string text)
-        {
-            if (text.Length > 0 && "=+-@\t\r\n".Contains(text[0])) text = "'" + text;
-            return "\"" + text.Replace("\"", "\"\"") + "\"";
-        }
-        string report = "파일,결과,설명\r\n" + string.Join("\r\n", _files.Select(f => $"{Csv(f.Path)},{Csv(f.Status)},{Csv(f.Error ?? "")}"));
+        string report = "파일,결과,설명,원본 바이트,저장 PST\r\n" + string.Join("\r\n", _files.Select(f =>
+            $"{ConversionReport.Escape(f.Path)},{ConversionReport.Escape(f.Status)},{ConversionReport.Escape(f.Error ?? "")},{f.File.Size},{ConversionReport.Escape(f.Output)}"));
         await _module!.InvokeVoidAsync("downloadReport", report);
     }
 
     private static string Size(long bytes) => bytes >= 1024L * 1024 * 1024 ? $"{bytes / 1024d / 1024 / 1024:N1} GB" : bytes >= 1024 * 1024 ? $"{bytes / 1024d / 1024:N1} MB" : bytes >= 1024 ? $"{bytes / 1024d:N1} KB" : $"{bytes} B";
     public async ValueTask DisposeAsync()
     {
-        if (_module is not null) { await _module.InvokeVoidAsync("releaseDownload"); await _module.InvokeVoidAsync("confirmLeave", false); await _module.DisposeAsync(); }
+        if (_module is not null) { await _module!.InvokeVoidAsync("releaseDownload"); await _module!.InvokeVoidAsync("confirmLeave", false); await _module.DisposeAsync(); }
     }
 }

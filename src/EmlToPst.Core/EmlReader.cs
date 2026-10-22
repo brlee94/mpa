@@ -15,10 +15,11 @@ public static class EmlReader
         return Read(stream);
     }
 
-    public static MimeMessage Read(Stream stream)
+    public static MimeMessage Read(Stream stream, bool persistent = false)
     {
-        // MimeKit owns decoded MIME content after Load returns (persistent = false).
-        var message = MimeMessage.Load(stream);
+        // Persistent parsing reuses the seekable input; callers must keep it open until
+        // the message and all attachment reads are finished. File-path reads use copies.
+        var message = MimeMessage.Load(stream, persistent);
         if (message.Headers.Count == 0 ||
             !message.Headers.Any(h => h.Id is HeaderId.From or HeaderId.To or
                 HeaderId.Subject or HeaderId.Date or HeaderId.MessageId or HeaderId.MimeVersion))

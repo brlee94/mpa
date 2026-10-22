@@ -10,9 +10,10 @@ public sealed class PstArchive : IDisposable
 {
     public const long MaxInputBytes = 4L * 1024 * 1024 * 1024;
     public const long MaxFileBytes = 100L * 1024 * 1024;
-    public const long MaxPartInputBytes = 100L * 1024 * 1024;
+    public const long MaxPartInputBytes = 32L * 1024 * 1024;
     public const int MaxFiles = 1000;
-    private readonly LimitedMemoryStream stream = new(384L * 1024 * 1024);
+    public const int MaxPartFiles = 64;
+    private readonly PartBuffer stream = new(384L * 1024 * 1024);
     private readonly PstOutputStream output;
     private readonly StoreWriter writer = new() { StoreDisplayName = "가져온 메일" };
     private bool completed;
@@ -27,7 +28,7 @@ public sealed class PstArchive : IDisposable
     public static MessageItem Prepare(byte[] original, bool preserveOriginal)
     {
         using var input = new MemoryStream(original, writable: false);
-        using var mime = EmlReader.Read(input);
+        using var mime = EmlReader.Read(input, persistent: true);
         var from = mime.From.Mailboxes.FirstOrDefault() ?? mime.Sender;
         DateTime sent = mime.Date == DateTimeOffset.MinValue ? DateTime.UtcNow : mime.Date.UtcDateTime;
         DateTime received = EmlReader.DeliveryTime(mime)?.UtcDateTime ?? sent;
@@ -112,13 +113,4 @@ public sealed class PstArchive : IDisposable
     }
 
     public void Dispose() { output.Dispose(); stream.Dispose(); }
-}
-
-internal sealed class LimitedMemoryStream(long limit) : MemoryStream
-{
-    public override void Write(byte[] buffer, int offset, int count)
-    {
-        if (Position + count > limit) throw new IOException("PST 한 개의 처리 한도(384MB)를 초과했습니다. 파일을 나누어 변환하세요.");
-        base.Write(buffer, offset, count);
-    }
 }

@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { chromium } from 'playwright';
 
 const dotnet = process.env.DOTNET || 'dotnet';
-const build = spawnSync(dotnet, ['build', 'tests/EmlToPst.Inspect', '-c', 'Release', '--nologo', '-p:RestoreLockedMode=true'], { encoding: 'utf8', timeout: 90_000 });
+const build = spawnSync(dotnet, ['build', 'tests/EmlToPst.Inspect', '-c', 'Release', '--nologo', '-p:RestoreLockedMode=true', '--disable-build-servers', '-m:1'], { encoding: 'utf8', timeout: 90_000 });
 assert.equal(build.status, 0, build.stdout + build.stderr);
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mpa-large-'));
 const output = path.resolve('artifacts/web-large-checks');
@@ -49,7 +49,7 @@ try {
   await page.locator('#mail-files:not([disabled])').waitFor({ timeout: 90_000 });
   const exactFile = await sparse('exact-100.eml', 100 * MiB);
   await page.locator('#mail-files').setInputFiles(exactFile);
-  const accepted100 = await page.getByRole('button', { name: 'PST로 변환하기' }).isEnabled();
+  const accepted100 = (await page.locator('.file-row').count()) === 1;
   check('exact 100MiB file is accepted', () => assert.equal(accepted100, true));
 
   const maxBatch = [];
@@ -77,11 +77,19 @@ try {
   const eml = Buffer.from(`From: sender@example.com\r\nTo: to@example.com\r\nSubject: Large attachment\r\nDate: Thu, 22 Oct 2026 10:30:00 +0900\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary="large"\r\n\r\n--large\r\nContent-Type: text/plain\r\n\r\nLarge test\r\n--large\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename="payload.bin"\r\nContent-Transfer-Encoding: base64\r\n\r\n${payload.toString('base64')}\r\n--large--\r\n`);
   const files = [];
   for (let i = 0; i < 3; i++) {
-    const filename = path.join(root, `${i + 1}.[코모브]UTG 평가 자료 송부 건.eml`);
+    const filename = path.join(root, `large-${i + 1}.eml`);
     await fs.writeFile(filename, eml);
     files.push(filename);
   }
   const originalHash = digest(eml), payloadHash = digest(payload);
+  const maxHeader = Buffer.from('From: sender@example.com\r\nTo: to@example.com\r\nSubject: Maximum file\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary="max"\r\n\r\n--max\r\nContent-Type: text/plain\r\n\r\nMaximum\r\n--max\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename="max.bin"\r\nContent-Transfer-Encoding: base64\r\n\r\n');
+  const maxFooter = Buffer.from('\r\n--max--\r\n');
+  const maxPayload = Buffer.alloc(Math.floor((100 * MiB - maxHeader.length - maxFooter.length) / 4) * 3, 0x7b);
+  const maxEml = Buffer.concat([maxHeader, Buffer.from(maxPayload.toString('base64')), maxFooter]);
+  assert(maxEml.length <= 100 * MiB && maxEml.length >= 100 * MiB - 3);
+  const maxOriginalHash = digest(maxEml), maxPayloadHash = digest(maxPayload);
+  const maxFile = path.join(root, 'real-100MiB.eml');
+  await fs.writeFile(maxFile, maxEml); files.push(maxFile);
   const initialHandles = await page.evaluate(async () => {
     const handle = await window.__mpaTestDir.getFileHandle('keep-existing.txt', { create: true });
     const writer = await handle.createWritable();
@@ -91,7 +99,7 @@ try {
   });
   assert.equal(initialHandles, true);
   await page.locator('#mail-files').setInputFiles(files);
-  console.log(`Converting ${(eml.length * 3 / MiB).toFixed(1)} MiB of real MIME data into disk-backed PST parts...`);
+  console.log(`Converting ${((eml.length * 3 + maxEml.length) / MiB).toFixed(1)} MiB of real MIME data into disk-backed PST parts...`);
   await page.getByRole('button', { name: 'PST로 변환하기' }).click();
   await page.getByText('폴더에 저장이 완료되었습니다.', { exact: true }).waitFor({ timeout: 240_000 });
   const saved = await page.evaluate(async () => {
@@ -104,8 +112,8 @@ try {
     }
     return entries.sort((a, b) => a.name.localeCompare(b.name));
   });
-  check('large batch splits into two disk-backed PSTs', () => {
-    assert.equal(saved.length, 2);
+  check('large batch splits into four disk-backed PSTs including a real 100MiB EML', () => {
+    assert.equal(saved.length, 4);
     assert(saved.every(p => p.size > 0 && p.size <= 384 * MiB));
   });
   const inspected = [];
@@ -124,13 +132,14 @@ try {
     inspected.push(...inspect(target));
   }
   check('independent reader verifies large attachment and original SHA256', () => {
-    assert.equal(inspected.length, 3);
+    assert.equal(inspected.length, 4);
     for (const mail of inspected) {
-      assert.equal(mail.subject, 'Large attachment');
+      const maximum = mail.subject === 'Maximum file';
+      assert(['Large attachment', 'Maximum file'].includes(mail.subject));
       assert.equal(mail.attachments.length, 2);
-      assert.equal(mail.attachments[0].size, payload.length);
-      assert.equal(mail.attachments[0].sha256, payloadHash);
-      assert.equal(mail.attachments[1].sha256, originalHash);
+      assert.equal(mail.attachments[0].size, maximum ? maxPayload.length : payload.length);
+      assert.equal(mail.attachments[0].sha256, maximum ? maxPayloadHash : payloadHash);
+      assert.equal(mail.attachments[1].sha256, maximum ? maxOriginalHash : originalHash);
     }
   });
   const existing = await page.evaluate(async () => (await (await window.__mpaTestDir.getFileHandle('keep-existing.txt')).getFile()).text());

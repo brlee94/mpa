@@ -3,7 +3,9 @@
   "private": true,
   "scripts": {
     "test:web": "node tests/web/check.mjs",
-    "test:web:large": "node tests/web/large.mjs"
+    "test:web:large": "node tests/web/large.mjs",
+    "test:web:recovery": "node tests/web/recovery.mjs",
+    "test:web:stress": "node tests/web/stress.mjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"

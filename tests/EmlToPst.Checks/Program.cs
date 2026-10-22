@@ -1,5 +1,6 @@
 using System.Text;
 using EmlToPst.Core;
+using EmlToPst.Pst;
 using MimeKit;
 
 string root = Path.Combine(Path.GetTempPath(), "emltopst-checks-" + Guid.NewGuid().ToString("N"));
@@ -144,6 +145,48 @@ try
         try { InputPlan.FromFiles([Path.Combine(root, "ignore.txt")]); }
         catch (ArgumentException) { rejected = true; }
         Expect(rejected, "Non-EML selected file accepted");
+    });
+    Check("PST block buffer random-access, holes, truncation and limit", () =>
+    {
+        using var actual = new PartBuffer(8 * 1024 * 1024);
+        using var expected = new MemoryStream();
+        var random = new Random(9471);
+        for (int i = 0; i < 80; i++)
+        {
+            long at = random.Next(0, 6 * 1024 * 1024);
+            byte[] bytes = new byte[random.Next(1, 100_000)]; random.NextBytes(bytes);
+            actual.Position = expected.Position = at;
+            actual.Write(bytes); expected.Write(bytes);
+        }
+        actual.SetLength(1024 * 1024 + 17); expected.SetLength(1024 * 1024 + 17);
+        actual.SetLength(4 * 1024 * 1024); expected.SetLength(4 * 1024 * 1024);
+        actual.Seek(-73, SeekOrigin.End); expected.Seek(-73, SeekOrigin.End);
+        actual.Write([4, 5, 6]); expected.Write([4, 5, 6]);
+        actual.Position = 0;
+        using var copy = new MemoryStream(); actual.CopyTo(copy);
+        Expect(copy.ToArray().SequenceEqual(expected.ToArray()), "PST seek/write/read bytes differ");
+        actual.Position = 8 * 1024 * 1024;
+        bool rejected = false; try { actual.WriteByte(1); } catch (IOException) { rejected = true; }
+        Expect(rejected, "PST buffer size limit not enforced");
+        actual.Dispose(); Expect(!actual.CanRead && !actual.CanWrite, "Disposed PST buffer is usable");
+    });
+    Check("conversion report legacy recovery and quoted CSV", () =>
+    {
+        string report = "파일,결과,설명\r\n" + ConversionReport.Escape("메일, \"한글\".eml") + ",PST 저장 완료,\r\n" + ConversionReport.Escape("=formula.eml") + ",저장되지 않음,\"line1\r\nline2\"";
+        var entries = ConversionReport.Read("\ufeff" + report);
+        Expect(entries.Count == 2 && entries[0].Saved && !entries[1].Saved, "Legacy saved status changed");
+        Expect(entries[0].Path == "메일, \"한글\".eml" && entries[1].Path == "=formula.eml", "CSV path changed");
+        Expect(entries[1].Description == "line1\r\nline2", "Multiline CSV changed");
+    });
+    Check("conversion report sizes, saved output and ambiguous rows", () =>
+    {
+        var entry = ConversionReport.Read("파일,결과,설명,원본 바이트,저장 PST\nmail.eml,이전 PST 저장 완료,,123,run/001.pst").Single();
+        Expect(entry.Saved && entry.Size == 123 && entry.Output == "run/001.pst", "Extended CSV changed");
+        foreach (string report in new[] { "文件,结果,说明\nx,y,z", "파일,결과,설명\na,PST 저장 완료,\na,저장되지 않음,", "파일,결과,설명\n\"unterminated" })
+        {
+            bool rejected = false; try { ConversionReport.Read(report); } catch (FormatException) { rejected = true; }
+            Expect(rejected, "Ambiguous/invalid report accepted");
+        }
     });
     Console.WriteLine($"{passed} checks passed; Outlook/PST integration not executed on this host.");
     return 0;
