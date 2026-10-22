@@ -3,14 +3,14 @@
 
 <header class="site-header">
     <a href="." class="brand"><span class="brand-mark">m</span><span>mpa<span class="brand-caption">MAIL TOOLS</span></span></a>
-    <nav aria-label="주 메뉴"><a class="nav-active" href="#converter">메일 변환</a><a href="#guide">사용 안내</a></nav>
+    <nav aria-label="주 메뉴"><a class="nav-active" href="#converter">메일 변환</a><a href="#merge">PST 합치기</a><a href="#guide">사용 안내</a></nav>
     <span class="privacy-badge"><span class="status-dot"></span>내 PC에서 안전하게 처리</span>
 </header>
 
 <main>
     <section class="hero">
         <span class="eyebrow">EML TO PST · BROWSER EDITION</span>
-        <span class="app-version" aria-label="앱 버전">@AppVersion.Label · 메모리 최적화 · 이어서 변환</span>
+        <span class="app-version" aria-label="앱 버전">@AppVersion.Label · 메모리 최적화 · 이어서 변환 · PST 합치기</span>
         <h1>메일을 옮기는,<br /><span>가장 간단한 방법.</span></h1>
         <p>흩어진 EML 메일을 하나의 PST로 모으세요.<br class="mobile-break" /> 설치 없이, Windows와 Mac 어디서든.</p>
         <div class="hero-features"><span>↗&nbsp; 프로그램 설치 없이</span><span>◇&nbsp; 메일 업로드 없이</span><span>✓&nbsp; 본문과 첨부파일 그대로</span></div>
@@ -20,18 +20,18 @@
         <div class="source-card card">
             <div class="card-heading"><div><span class="step-number">01</span><h2>변환할 메일 선택</h2></div><span class="format-chip">.eml → .pst</span></div>
             <div class="drop-zone @(_busy ? "is-busy" : "")">
-                <InputFile id="mail-files" @key="_inputKey" OnChange="e => Select(e, false)" multiple accept=".eml,.eml.15,.15" disabled="@(!_ready || _busy)" aria-label="EML 파일 선택 또는 드래그" />
+                <InputFile id="mail-files" @key="_inputKey" OnChange="e => Select(e, false)" multiple accept=".eml,.eml.15,.15" disabled="@(!_ready || _busy || _mergeBusy)" aria-label="EML 파일 선택 또는 드래그" />
                 <div class="upload-icon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M16 22V5m0 0-6 6m6-6 6 6M6 21v5h20v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
                 <h3>메일 파일을 여기에 놓아주세요</h3><p>또는 클릭하여 EML 파일 선택</p><span class="upload-limit">최대 @PstArchive.MaxFiles.ToString("N0")개 · 총 @Size(PstArchive.MaxInputBytes) · 파일당 @Size(PstArchive.MaxFileBytes)</span>
             </div>
-            <div class="folder-select"><span>폴더째 변환하고 싶다면</span><label class="folder-button"><span aria-hidden="true">▱</span> 폴더 선택<InputFile id="mail-folder" @key="_inputKey" OnChange="e => Select(e, true)" multiple webkitdirectory="" directory="" disabled="@(!_ready || _busy)" aria-label="EML 폴더 선택" /></label></div>
+            <div class="folder-select"><span>폴더째 변환하고 싶다면</span><label class="folder-button"><span aria-hidden="true">▱</span> 폴더 선택<InputFile id="mail-folder" @key="_inputKey" OnChange="e => Select(e, true)" multiple webkitdirectory="" directory="" disabled="@(!_ready || _busy || _mergeBusy)" aria-label="EML 폴더 선택" /></label></div>
 
             @if (_notice is not null)
             {
                 <div class="notice @(_error ? "notice-error" : "")" role="@(_error ? "alert" : "status")">@_notice</div>
             }
 
-            <div class="file-list-heading"><h3>선택한 메일 <span>@_files.Count</span></h3><button class="text-button" @onclick="Reset" disabled="@(_busy || _files.Count == 0)">모두 지우기</button></div>
+            <div class="file-list-heading"><h3>선택한 메일 <span>@_files.Count</span></h3><button class="text-button" @onclick="Reset" disabled="@(_busy || _mergeBusy || _files.Count == 0)">모두 지우기</button></div>
             @if (_files.Count == 0)
             {
                 <div class="empty-state"><span aria-hidden="true">✉</span><p>아직 선택한 메일이 없습니다.</p><small>메일 파일을 선택하면 이곳에 표시됩니다.</small></div>
@@ -46,14 +46,14 @@
                             <div class="file-info"><strong title="@file.Path">@file.Path</strong><small title="@file.Error">@(file.Error ?? file.Status)</small></div>
                             <span class="file-size">@Size(file.File.Size)</span>
                             <span class="file-state @file.State" aria-label="@file.Status">@(file.State == "success" ? "✓" : file.State == "failed" ? "!" : "·")</span>
-                            <button class="remove-button" aria-label="@($"{file.File.Name} 삭제")" disabled="@_busy" @onclick="() => Remove(file)">×</button>
+                            <button class="remove-button" aria-label="@($"{file.File.Name} 삭제")" disabled="@(_busy || _mergeBusy)" @onclick="() => Remove(file)">×</button>
                         </div>
                     }
                 </div>
             }
             @if (_files.Count > 0)
             {
-                <div class="recovery-option"><strong>중단된 작업 이어서 변환</strong><p>이전과 동일한 EML 전체를 선택한 뒤 변환결과.csv를 불러오세요. 저장 완료 메일은 제외합니다.</p><label class="folder-button">이전 보고서 불러오기<InputFile id="resume-report" OnChange="ImportReport" accept=".csv" disabled="@_busy" aria-label="이전 변환 보고서 선택" /></label></div>
+                <div class="recovery-option"><strong>중단된 작업 이어서 변환</strong><p>이전과 동일한 EML 전체를 선택한 뒤 변환결과.csv를 불러오세요. 저장 완료 메일은 제외합니다.</p><label class="folder-button">이전 보고서 불러오기<InputFile id="resume-report" OnChange="ImportReport" accept=".csv" disabled="@(_busy || _mergeBusy)" aria-label="이전 변환 보고서 선택" /></label></div>
             }
             <div class="local-note"><span aria-hidden="true">◇</span><p>선택한 메일은 서버로 전송되지 않습니다.<br />변환은 이 브라우저 안에서만 진행됩니다.</p></div>
         </div>
@@ -61,12 +61,12 @@
         <aside class="result-card card">
             <div class="card-heading"><div><span class="step-number">02</span><h2>변환 설정</h2></div></div>
             <label class="field-label" for="output-name">저장할 파일 이름</label>
-            <div class="filename-field"><input id="output-name" maxlength="100" @bind="_outputName" @bind:event="oninput" disabled="@_busy" /><span>.pst</span></div>
-            <label class="option"><input type="checkbox" @bind="_preserveOriginal" disabled="@_busy" /><span><strong>원본 EML 함께 보존</strong><small>각 메일에 원본을 첨부합니다.<br />결과 파일 용량이 늘어납니다.</small></span></label>
+            <div class="filename-field"><input id="output-name" maxlength="100" @bind="_outputName" @bind:event="oninput" disabled="@(_busy || _mergeBusy)" /><span>.pst</span></div>
+            <label class="option"><input type="checkbox" @bind="_preserveOriginal" disabled="@(_busy || _mergeBusy)" /><span><strong>원본 EML 함께 보존</strong><small>각 메일에 원본을 첨부합니다.<br />결과 파일 용량이 늘어납니다.</small></span></label>
             <div class="directory-option">
                 <strong>대용량·분할 저장</strong>
                 <p>총 32MB를 넘으면 저장 폴더를 선택하세요. 원본 약 32MB 또는 64개씩 나누어 PST로 저장하고 메모리를 비웁니다. 큰 메일 한 개는 별도 PST로 저장합니다.</p>
-                <button class="secondary-button full-width" @onclick="ChooseDirectory" disabled="@(!_ready || _busy || !_directorySupported)">@(_directoryReady ? "저장 폴더 변경" : "저장 폴더 선택")</button>
+                <button class="secondary-button full-width" @onclick="ChooseDirectory" disabled="@(!_ready || _busy || _mergeBusy || !_directorySupported)">@(_directoryReady ? "저장 폴더 변경" : "저장 폴더 선택")</button>
                 @if (_directoryReady) { <small>선택한 폴더: @_directoryName</small> }
                 else if (_ready && !_directorySupported) { <small>대용량 저장은 Windows·Mac의 최신 Chrome/Edge에서 지원합니다.</small> }
                 @if (NeedsDirectory && !_directoryReady) { <small class="directory-required">현재 용량은 저장 폴더 선택이 필요합니다.</small> }
@@ -84,25 +84,27 @@
                 <ul class="saved-parts" aria-label="저장된 PST 목록">@foreach (var part in _savedParts) { <li><span>@part.Name</span><small>@Size(part.Size) · @part.Count 개</small></li> }</ul>
                 <button class="text-button report-button" @onclick="DownloadReport">변환 보고서 저장</button>
                 @if (_files.Any(f => f.State != "success") && _savedParts.Count > 0)
-                { <button class="primary-button full-width" @onclick="RetryRemaining">미저장 메일만 다시 변환</button> }
-                <button class="secondary-button full-width" @onclick="Convert">설정 바꿔 다시 변환</button>
+                { <button class="primary-button full-width" @onclick="RetryRemaining" disabled="@_mergeBusy">미저장 메일만 다시 변환</button> }
+                <button class="secondary-button full-width" @onclick="Convert" disabled="@_mergeBusy">설정 바꿔 다시 변환</button>
             }
             else if (_downloadUrl is not null)
             {
                 <div class="success-note" role="status"><strong>변환이 완료되었습니다.</strong><span>성공 @_succeeded 개 · 실패 @_failed 개</span><span>@Size(_resultSize) · @_resultName</span></div>
                 <a class="primary-button full-width" href="@_downloadUrl" download="@_resultName">PST 저장하기 <span aria-hidden="true">↓</span></a>
                 <button class="text-button report-button" @onclick="DownloadReport">변환 보고서 저장</button>
-                <button class="secondary-button full-width" @onclick="Convert">설정 바꿔 다시 변환</button>
+                <button class="secondary-button full-width" @onclick="Convert" disabled="@_mergeBusy">설정 바꿔 다시 변환</button>
             }
             else
             {
-                <button class="primary-button full-width" @onclick="Convert" disabled="@(!_ready || _files.Count == 0 || string.IsNullOrWhiteSpace(_outputName) || (NeedsDirectory && !_directoryReady))">@(_resumeLoaded ? "완료 제외하고 변환하기" : "PST로 변환하기") <span aria-hidden="true">→</span></button>
+                <button class="primary-button full-width" @onclick="Convert" disabled="@(!_ready || _mergeBusy || _files.Count == 0 || string.IsNullOrWhiteSpace(_outputName) || (NeedsDirectory && !_directoryReady))">@(_resumeLoaded ? "완료 제외하고 변환하기" : "PST로 변환하기") <span aria-hidden="true">→</span></button>
                 @if (_processed > 0) { <button class="text-button report-button" @onclick="DownloadReport">변환 보고서 저장</button> }
             }
             <p class="result-help">프로그램을 받을 필요 없이<br />변환된 PST 파일만 저장하세요.<br />분할 저장 시 완료된 PST부터 폴더에 남습니다.</p>
             <div class="compatibility"><span>사용 가능한 환경</span><strong>Windows & macOS</strong><small>권장 브라우저: 최신 Chrome · Edge</small></div>
         </aside>
     </section>
+
+    <PstMerger Disabled="@_busy" BusyChanged="MergeBusyChanged" />
 
     <section class="guide" id="guide">
         <div class="section-title"><span class="eyebrow">HOW IT WORKS</span><h2>세 단계면 충분합니다.</h2></div>
@@ -127,7 +129,7 @@
     private readonly List<MailFile> _files = [];
     private readonly List<SavedPart> _savedParts = [];
     private IJSObjectReference? _module;
-    private bool _ready, _busy, _error, _cancelRequested, _resumeLoaded;
+    private bool _ready, _busy, _error, _cancelRequested, _resumeLoaded, _mergeBusy;
     private string? _activeFile;
     private bool _preserveOriginal = true;
     private string _outputName = "가져온메일";
@@ -161,7 +163,7 @@
 
     private async Task Select(InputFileChangeEventArgs args, bool folder)
     {
-        if (_busy || !_ready) return;
+        if (_busy || _mergeBusy || !_ready) return;
         await ClearResult();
         _files.Clear();
         _notice = null;
@@ -190,7 +192,7 @@
 
     private async Task Reset()
     {
-        if (_busy) return;
+        if (_busy || _mergeBusy) return;
         await ClearResult();
         _files.Clear();
         _notice = null;
@@ -208,12 +210,14 @@
         _error = false;
     }
 
+    private void MergeBusyChanged(bool busy) { _mergeBusy = busy; }
+
     private void Fail(string text) { _notice = text; _error = true; }
     private void Cancel() { _cancelRequested = true; _stage = "현재 메일을 마치고 중지합니다"; }
 
     private async Task ChooseDirectory()
     {
-        if (_busy || !_directorySupported) return;
+        if (_busy || _mergeBusy || !_directorySupported) return;
         try
         {
             string? name = await _module!.InvokeAsync<string?>("chooseDirectory");
@@ -299,7 +303,7 @@
 
     private async Task Run(bool resume)
     {
-        if (_busy || _files.Count == 0) return;
+        if (_busy || _mergeBusy || _files.Count == 0) return;
         if (NeedsDirectory && !_directoryReady) { Fail("32MB를 초과하는 작업은 먼저 저장 폴더를 선택해 주세요."); return; }
         var pending = _files.Where(f => !resume || f.State != "success").ToList();
         if (pending.Count == 0) { Fail("모든 메일이 이미 저장 완료로 기록되어 있습니다."); return; }
@@ -393,7 +397,7 @@
 
     private async Task ImportReport(InputFileChangeEventArgs args)
     {
-        if (_busy || _files.Count == 0) return;
+        if (_busy || _mergeBusy || _files.Count == 0) return;
         try
         {
             await using var stream = args.File.OpenReadStream(2 * 1024 * 1024);

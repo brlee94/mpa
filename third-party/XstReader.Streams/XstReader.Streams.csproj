@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework><RootNamespace>XstReader</RootNamespace>
+    <AssemblyName>XstReader.Streams</AssemblyName><Nullable>disable</Nullable><ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks><TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CS0618;CS0168;CS0649;SYSLIB0057</NoWarn>
+  </PropertyGroup>
+  <ItemGroup><Compile Remove="ElementProperties/StandardProperties.cs" /></ItemGroup>
+  <ItemGroup><PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" /></ItemGroup>
+</Project>

@@ -2,14 +2,17 @@ using System.Text.Json;
 using XstReader;
 using XstReader.ElementProperties;
 
-if (args.Length is < 1 or > 2 || (args.Length == 2 && args[1] != "--summary")) return 2;
-bool summary = args.Length == 2;
+if (args.Length is < 1 or > 2 || (args.Length == 2 && args[1] is not ("--summary" or "--folders"))) return 2;
+bool summary = args.Length == 2 && args[1] == "--summary";
+bool foldersOnly = args.Length == 2 && args[1] == "--folders";
+var folders = new List<string>();
 using var file = new XstFile(args[0]);
 var messages = new List<object>();
 void Walk(XstFolder folder, string parent)
 {
     string folderPath = parent + "/" + folder.DisplayName;
-    foreach (var message in folder.Messages)
+    folders.Add(folderPath);
+    foreach (var message in foldersOnly ? Enumerable.Empty<XstMessage>() : folder.Messages)
     {
         var attachments = new List<object>();
         foreach (var attachment in message.Attachments)
@@ -50,5 +53,5 @@ void Walk(XstFolder folder, string parent)
     foreach (var child in folder.Folders) Walk(child, folderPath);
 }
 Walk(file.RootFolder, "");
-Console.WriteLine(JsonSerializer.Serialize(messages));
+Console.WriteLine(foldersOnly ? JsonSerializer.Serialize(folders) : JsonSerializer.Serialize(messages));
 return 0;

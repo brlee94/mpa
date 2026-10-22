@@ -11,3 +11,19 @@
 .recovery-option p { font-size: 13px; line-height: 1.6; color: #596862; margin: 8px 0 12px; }
 
 .app-version { display: block; width: fit-content; max-width: 100%; margin: 10px auto 0; padding: 4px 12px; border-radius: 20px; color: var(--green); background: #eaf3ed; font-size: 11px; }
+
+.merge-section { margin-top: 28px; scroll-margin-top: 24px; }
+.merge-intro { color: #657e70; font-size: 13px; margin-bottom: 22px; }
+.merge-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 26px; }
+.merge-grid input[type=file] { max-width: 100%; font-size: 12px; }
+.merge-files { list-style: none; padding: 0; margin: 12px 0; max-height: 220px; overflow: auto; }
+.merge-files li { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); padding: 7px 0; font-size: 12px; }
+.merge-files span { overflow-wrap: anywhere; min-width: 0; }
+.merge-files small { color: #789580; white-space: nowrap; }
+.merge-help, .merge-total { font-size: 11px; line-height: 1.8; color: #789580; margin: 12px 0; }
+.merge-progress { display: grid; gap: 5px; font-size: 12px; color: var(--green); margin: 18px 0; }
+.merge-progress small { overflow-wrap: anywhere; }
+.merge-start { margin-top: 20px; }
+.merge-success { margin-top: 22px; }
+@media(max-width: 850px) { .merge-grid { grid-template-columns: 1fr; gap: 16px; } }
+@media(max-width: 500px) { .site-header nav { gap: 12px; font-size: 10px; } }

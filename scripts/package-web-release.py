@@ -11,7 +11,12 @@ match = re.search(r'public const string Id = "([a-z0-9-]+)";', source)
 if not match:
     raise SystemExit("AppVersion.Id must be a lower-case release path segment")
 version = match.group(1)
-manifest = {"version": version, "path": f"releases/{version}/"}
+html = (root / "index.html").read_text(encoding="utf-8")
+importmap_match = re.search(r'<script type="importmap">(.*?)</script>', html, re.S)
+if not importmap_match:
+    raise SystemExit("Published app import map is missing")
+imports = json.loads(importmap_match.group(1))["imports"]
+manifest = {"version": version, "path": f"releases/{version}/", "runtimeModule": imports["./_framework/dotnet.js"]}
 (root / "release.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 release = root / manifest["path"]
 if release.exists():

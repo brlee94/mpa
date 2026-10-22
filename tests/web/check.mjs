@@ -95,7 +95,7 @@ async function run(browserType, name, launchOptions = {}) {
     await page.goto(baseUrl);
     await page.locator('#mail-files:not([disabled])').waitFor({ timeout: 90_000 });
     const version = await page.getByLabel('앱 버전', { exact: true }).innerText();
-    check(`${name}: visible release version identifies the running app`, () => assert.match(version, /버전 4/));
+    check(`${name}: visible release version identifies the running app`, () => assert.match(version, /버전 5/));
     const initiallyDisabled = await page.getByRole('button', { name: 'PST로 변환하기' }).isDisabled();
     check(`${name}: empty state does not enable conversion`, () => assert.equal(initiallyDisabled, true));
     await page.screenshot({ path: path.join(output, `${name}-desktop.png`), fullPage: true });
@@ -150,7 +150,7 @@ async function run(browserType, name, launchOptions = {}) {
       assert.match(reportText, /invalid\.eml/);
       assert.match(reportText, /변환 실패/);
       assert.match(reportText, /파일,결과,설명,원본 바이트,저장 PST,앱 버전/);
-      assert.match(reportText, /recovery-v4/);
+      assert.match(reportText, /merge-v5/);
     });
 
     await page.getByLabel('원본 EML 함께 보존').uncheck();

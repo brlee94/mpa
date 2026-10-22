@@ -4,7 +4,7 @@ Windows와 macOS의 **브라우저 안에서** EML을 Unicode PST로 변환합�
 
 ## 사용
 
-최신 복구 버전 전용 주소: **https://brlee94.github.io/mpa/releases/recovery-v4/**. 화면 상단에 **버전 4**가 표시됩니다. 루트 주소의 캐시와 분리한 전체 앱을 이 경로에 게시합니다. 새 보고서는 `앱 버전` 열에 `recovery-v4`를 기록합니다.
+최신 버전 전용 주소: **https://brlee94.github.io/mpa/releases/merge-v5/**. 화면 상단에 **버전 5**가 표시됩니다. 루트 주소의 캐시와 분리한 전체 앱을 이 경로에 게시합니다. 새 보고서는 `앱 버전` 열에 `merge-v5`를 기록합니다.
 
 1. 배포된 웹사이트에서 EML 파일을 드래그하거나 **폴더 선택**을 누릅니다.
 2. 결과 파일 이름과 원본 EML 첨부 여부를 선택합니다.
@@ -13,6 +13,16 @@ Windows와 macOS의 **브라우저 안에서** EML을 Unicode PST로 변환합�
 폴더 선택 시 폴더 구조를 유지합니다. `.eml`, `.EML`, `.eml.15`를 지원합니다. Windows에서 보이는 `Outlook.File.eml.15`는 일반 EML의 형식 이름인 경우가 많습니다.
 
 권장 브라우저는 Windows/macOS의 최신 Chrome 또는 Edge입니다. OS와 무관하게 WebAssembly 및 로컬 파일 선택 기능을 사용합니다. Safari용 엔진 다운로드가 현재 빌드 환경의 네트워크 정책에 차단되어 Safari 실행 검증은 하지 못했습니다.
+
+## 여러 PST를 하나로 합치기
+
+1. 버전 5에서 **PST 합치기**를 누르고 PST 2~256개(합계 4GiB 이하, 읽는 메일 100,000개 이하)를 선택합니다.
+2. 결과 이름과 **동일 폴더의 중복 메일 제외** 여부를 선택합니다. 중복 제외는 기본값이며, Message-ID만 비교하지 않고 폴더 경로·주요 메일 정보·본문·첨부 내용을 SHA-256으로 대조합니다. 내용이 다르거나 폴더가 다르면 보존합니다.
+3. 결과 저장 폴더를 선택하고 **하나의 PST로 합치기**를 누릅니다. 새 작업 폴더에 PST 하나가 저장됩니다. 원본 PST와 이전 결과는 변경하지 않습니다.
+
+이 앱에서 생성한 메일 PST가 검증 대상입니다. 메일이 있는 폴더 경로와 상위 구조, 텍스트/HTML, 발신자·To/Cc/Bcc·날짜·Message-ID, 일반 첨부·인라인 이미지·원본 EML을 옮깁니다. 연락처·일정·작업, RTF 전용 본문, Outlook 메시지 형식의 내장 첨부는 지원하지 않으며 발견하면 전체 병합을 중단합니다. 잘못된 입력이나 저장 실패 때 일부 메일만 들어간 결과를 게시하지 않습니다.
+
+PST 병합은 Windows/macOS의 최신 Chrome/Edge에서 동작합니다. Web Worker가 별도 .NET 런타임을 실행하고, 입력 PST 하나와 작성 중인 결과를 OPFS 임시 디스크에서 처리합니다. 읽기와 첨부 복사는 작은 블록으로 스트리밍하며 결과 전체를 RAM에 적재하지 않습니다. 완료·중지 시 작업자를 종료해 병합 엔진의 WASM 메모리를 해제하고 임시 파일을 삭제합니다. 최종 결과는 파일 스트림으로 선택 폴더에 복사합니다. 임시 저장소에 대략 원본 합계+가장 큰 입력 PST만큼, 결과 폴더에 병합 파일만큼의 여유 공간이 필요합니다. 임시 저장 공간 부족도 명확한 오류로 처리합니다. 결과 파일 내부 한도는 8GiB이며 입력 합계는 4GiB입니다.
 
 ## 보존 범위와 한도
 
@@ -73,11 +83,15 @@ WEB_URL=http://127.0.0.1:8765/ npm run test:web
 WEB_URL=http://127.0.0.1:8765/ npm run test:web:large
 WEB_URL=http://127.0.0.1:8765/ npm run test:web:recovery
 WEB_URL=http://127.0.0.1:8765/ npm run test:web:stress
+WEB_URL=http://127.0.0.1:8765/ npm run test:web:merge
+WEB_URL=http://127.0.0.1:8765/ npm run test:web:merge-large
 ```
 
 `CHROMIUM_PATH`는 기본 `/usr/bin/chromium`입니다. 다른 경로이면 지정하세요. `DOTNET`으로 SDK 실행 파일 경로를 지정할 수 있습니다. `TEST_WEBKIT=1`로 WebKit도 실행할 수 있으나 해당 Playwright 브라우저 설치가 먼저 필요합니다. 검증 스크립트는 독립 PST 리더를 자동으로 빌드하고 `artifacts/web-checks`에 출력과 스크린샷을 남깁니다. 대용량 검사는 `artifacts/web-large-checks`에 결과를 남깁니다.
 
 대용량 검사의 합계 4GiB 경계는 희소 파일의 메타데이터로 검사하며, 전체 4GiB 메일 본문을 변환하는 검사는 하지 않습니다. 실제 대용량 변환은 약 43MiB EML 세 개와 100MiB에 가까운 EML 한 개를 사용합니다. 복구 검사는 두 번째 PST 저장 시 디스크 오류를 주입하고, 앞선 64개 보존 및 나머지 67개만 재시도하는 동작과 이전 형식 CSV(638개 중 286개 완료)를 적용해 352개만 생성하는 동작을 확인합니다. 장시간 검사는 약 1.25GiB의 합성 EML 638개를 한 번에 변환합니다. 각 PST를 독립 리더로 읽고 모든 첨부와 원본 EML의 SHA-256 및 누락·중복 여부를 검사합니다. 자동화에서는 운영체제의 폴더 선택 대화상자만 대체하며, 실제 브라우저의 디스크 기반 FileSystemDirectoryHandle(OPFS)에 저장합니다. 장시간 검사는 CDP로 테스트용 OPFS 한도만 8GiB로 설정합니다. 사용자 선택 폴더의 저장 방식은 변경하지 않으며, 저장 오류에 대한 검사는 별도로 실행합니다. 사용자 이메일은 테스트나 저장소에 포함하지 않습니다.
+
+PST 병합 검사는 별도 읽기 엔진으로 폴더·본문·수신자·시간·첨부 바이트를 대조하고, 동일 폴더의 중복 제외 및 다른 폴더/다른 내용 보존, 중복 보존 옵션, 중지·잘못된 입력·미지원 항목·저장 실패 시 결과 폐기와 임시 파일 정리, 원본 해시 불변을 검사합니다. 대용량 병합 검사는 8MiB 첨부가 포함된 메일 288개(첨부 합계 2.25GiB)를 세 PST에서 하나로 합치고 2GiB를 넘는 오프셋과 모든 첨부 SHA-256을 확인합니다. 일반 브라우저와 같은 디스크 기반 OPFS를 사용하는 임시 지속 프로필에서 테스트용 OPFS 할당량만 12GiB로 설정하며, 작업 완료 후 임시 디스크 삭제와 병합 단계 직후 샘플한 관리 힙 크기도 확인합니다.
 
 Windows/macOS의 실제 Outlook에서 파일을 여는 검증은 이 Linux 환경에서 실행하지 못했습니다. 최초 사용 시 소량의 메일로 결과를 확인하세요.
 
@@ -86,6 +100,8 @@ Windows/macOS의 실제 Outlook에서 파일을 여는 검증은 이 Linux 환�
 - `src/EmlToPst.Web`: 한국어 Blazor WebAssembly UI. 메일 업로드 API 없음.
 - `src/EmlToPst.Pst`: 메모리상의 PST 생성 및 MIME → 메시지 매핑. PstBuilder 1.3.0 사용.
 - `src/EmlToPst.Core`: MimeKit 기반 MIME 파싱 및 첨부 처리.
+- `src/EmlToPst.Merge`: 디스크 스트림 기반 PST 병합·중복 검사.
+- `third-party/XstReader.Streams`: MS-PL 읽기 엔진의 스트림·동기 정리 수정본. 원본 출처와 변경 내역을 포함합니다.
 - `tests/web`: 브라우저 및 독립 PST 읽기 검사.
 - `tests/EmlToPst.Inspect`: 개발 검증용 XstReader. 웹앱에는 포함하지 않음.
 

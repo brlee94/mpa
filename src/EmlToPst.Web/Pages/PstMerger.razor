@@ -1,0 +1,113 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<section class="merge-section card" id="merge" aria-label="PST 파일 합치기">
+    <div class="card-heading"><div><span class="step-number">＋</span><h2>PST 파일 합치기</h2></div><span class="format-chip">여러 PST → 하나의 PST</span></div>
+    <p class="merge-intro">분할 저장한 메일 PST를 하나로 모으세요. 메일이 있는 폴더 경로를 유지하고, 같은 경로의 폴더는 합칩니다. 원본 PST는 변경하지 않습니다.</p>
+    <div class="merge-grid">
+        <div>
+            <label class="field-label" for="merge-files">합칠 PST 파일 선택 · 2~256개 · 합계 4GB까지</label>
+            <InputFile id="merge-files" OnChange="Select" multiple accept=".pst" disabled="@(_busy || Disabled || !_supported)" />
+            @if (_files.Count > 0)
+            {
+                <ul class="merge-files" aria-label="병합할 PST 목록">@foreach (var file in _files) { <li><span>@file.Name</span><small>@Size(file.Size)</small></li> }</ul>
+                <p class="merge-total">선택 @_files.Count 개 · 원본 합계 @Size(_files.Sum(f => f.Size))</p>
+            }
+            <p class="merge-help">이 변환기로 만든 메일 PST를 지원합니다. 텍스트·HTML 본문, 수신자, 날짜, 일반 첨부·인라인 이미지·원본 EML을 보존합니다. 연락처·일정·작업, RTF 전용 본문, Outlook 메시지 형식의 내장 첨부는 지원하지 않으며 발견 시 병합을 중단합니다.</p>
+        </div>
+        <div>
+            <label class="field-label" for="merge-name">병합 결과 파일 이름</label>
+            <div class="filename-field"><input id="merge-name" @bind="_name" disabled="@(_busy || Disabled)" maxlength="100" /><span>.pst</span></div>
+            <label class="option"><input id="merge-deduplicate" type="checkbox" @bind="_deduplicate" disabled="@(_busy || Disabled)" /><span><strong>동일 폴더의 중복 메일 제외</strong><small>본문·첨부·주요 메일 정보가 모두 같은 경우에만 한 개를 남깁니다.</small></span></label>
+            <button class="secondary-button full-width" @onclick="ChooseDirectory" disabled="@(_busy || Disabled || !_supported)">@(_directory is null ? "병합 결과 저장 폴더 선택" : "병합 결과 저장 폴더 변경")</button>
+            @if (_directory is not null) { <p class="merge-help">저장 폴더: @_directory</p> }
+            <p class="merge-help">Windows·Mac의 최신 Chrome/Edge에서 사용할 수 있습니다. 브라우저 임시 디스크에 조금씩 읽고 쓰며, 저장할 PST 전체를 메모리에 올리지 않습니다. 임시 파일과 최종 결과를 위한 디스크 공간이 필요합니다.</p>
+        </div>
+    </div>
+    @if (_notice is not null) { <div class="notice notice-error" role="alert">@_notice</div> }
+    @if (_busy)
+    {
+        <div class="merge-progress" role="status"><strong>@_progress.Stage</strong><span>@_progress.Index / @_files.Count 개 PST · 읽음 @_progress.Read 개 · 병합 @_progress.Added 개 · 중복 @_progress.Duplicates 개</span><small>@_progress.File</small></div>
+        <button class="secondary-button" @onclick="Cancel" disabled="@_cancelling">@(_cancelling ? "중지하는 중…" : "병합 중지")</button>
+    }
+    else
+    {
+        <button class="primary-button merge-start" @onclick="Start" disabled="@(Disabled || !_supported || _files.Count < 2 || _directory is null || string.IsNullOrWhiteSpace(_name))">하나의 PST로 합치기</button>
+    }
+    @if (_result is not null)
+    {
+        <div class="success-note merge-success" role="status"><strong>하나의 PST로 저장했습니다.</strong><span>@_result.Name · @Size(_result.Size) · 메일 @_result.Count 개 · 중복 제외 @_result.Duplicates 개</span><span>@_result.Location</span></div>
+        <ul class="merge-files">@foreach (var source in _result.Sources) { <li><span>@source.Name</span><small>병합 @source.Added 개 · 중복 @source.Duplicates 개</small></li> }</ul>
+        <button class="text-button" @onclick="DownloadReport">병합 보고서 저장</button>
+    }
+</section>
+
+@code {
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback<bool> BusyChanged { get; set; }
+    public sealed record ProgressInfo(string Stage, string File, int Index, int Read, int Added, int Duplicates);
+    private sealed record SourceInfo(string Name, int Read, int Added, int Duplicates);
+    private sealed record ResultInfo(string Name, long Size, int Count, int Duplicates, string Location, long PeakManagedBytes, SourceInfo[] Sources);
+    private readonly List<IBrowserFile> _files = [];
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<PstMerger>? _reference;
+    private bool _supported, _busy, _cancelling, _deduplicate = true;
+    private string _name = "병합한메일";
+    private string? _directory, _notice;
+    private ResultInfo? _result;
+    private ProgressInfo _progress = new("병합 엔진을 준비하는 중", "", 0, 0, 0, 0);
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", $"./merge.js?v={AppVersion.Id}");
+        _supported = await _module.InvokeAsync<bool>("supported");
+        _reference = DotNetObjectReference.Create(this);
+        StateHasChanged();
+    }
+    private void Select(InputFileChangeEventArgs args)
+    {
+        if (_busy || Disabled) return;
+        _files.Clear(); _result = null; _notice = null;
+        if (args.FileCount > 256) { _notice = "한 번에 PST 256개까지 선택해 주세요."; return; }
+        var files = args.GetMultipleFiles(256);
+        if (files.Any(f => !f.Name.EndsWith(".pst", StringComparison.OrdinalIgnoreCase))) { _notice = "PST 파일만 선택해 주세요."; return; }
+        if (files.Sum(f => f.Size) > 4L * 1024 * 1024 * 1024) { _notice = "병합할 PST 합계는 4GB까지 지원합니다."; return; }
+        _files.AddRange(files);
+    }
+    private async Task ChooseDirectory()
+    {
+        if (_busy || Disabled) return;
+        try { string? name = await _module!.InvokeAsync<string?>("chooseDirectory"); if (name is not null) _directory = name; }
+        catch (JSException ex) { _notice = ex.Message; }
+    }
+    private async Task Start()
+    {
+        if (_busy || Disabled || _files.Count < 2 || _directory is null) return;
+        _busy = true; _cancelling = false; _notice = null; _result = null;
+        _progress = new("병합 엔진을 준비하는 중", "", 0, 0, 0, 0);
+        await BusyChanged.InvokeAsync(true);
+        string name = new(_name.Trim().Select(c => c < 32 || "<>:\"/\\|?*".Contains(c) ? '_' : c).ToArray());
+        name = name.TrimEnd(' ', '.');
+        if (name.EndsWith(".pst", StringComparison.OrdinalIgnoreCase)) name = name[..^4];
+        if (name == "") name = "병합한메일";
+        try { _result = await _module!.InvokeAsync<ResultInfo>("merge", "merge-files", name, _deduplicate, _reference); }
+        catch (Exception ex) { _notice = "PST 병합을 완료하지 못했습니다. " + ex.Message; }
+        finally { _busy = false; _cancelling = false; await BusyChanged.InvokeAsync(false); }
+    }
+    [JSInvokable]
+    public Task MergeProgress(ProgressInfo value) { _progress = value; return InvokeAsync(StateHasChanged); }
+    private async Task Cancel() { _cancelling = true; await _module!.InvokeVoidAsync("cancel"); }
+    private async Task DownloadReport()
+    {
+        if (_result is null) return;
+        string report = "입력 PST,읽은 메일,병합 메일,제외 중복,저장 결과,앱 버전\r\n" + string.Join("\r\n", _result.Sources.Select(source =>
+            $"{ConversionReport.Escape(source.Name)},{source.Read},{source.Added},{source.Duplicates},{ConversionReport.Escape(_result.Location + "/" + _result.Name)},{AppVersion.Id}"));
+        await _module!.InvokeVoidAsync("downloadReport", report);
+    }
+    private static string Size(long bytes) => bytes >= 1024L * 1024 * 1024 ? $"{bytes / 1024d / 1024 / 1024:N1} GB" : $"{bytes / 1024d / 1024:N1} MB";
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null) { await _module.InvokeVoidAsync("cancel"); await _module.DisposeAsync(); }
+        _reference?.Dispose();
+    }
+}

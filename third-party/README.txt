@@ -1,6 +1,7 @@
 Third-party components
 
 Web application:
+- XstReader.Streams (MS-PL), adapted from iluvadev/XstReader commit da80989623f60685beaf5132948d32a3da48fd60; see XstReader.Streams/LOCAL-CHANGES.md and LICENSE.md
 - PstBuilder 1.3.0 (MIT), https://github.com/ml-ls/PST-Builder
 - MimeKit 4.18.2 (MIT), https://github.com/jstedfast/MimeKit
 - BouncyCastle.Cryptography 2.7.0 (MIT-style), https://github.com/bcgit/bc-csharp

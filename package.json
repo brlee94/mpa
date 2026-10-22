@@ -5,7 +5,9 @@
     "test:web": "node tests/web/check.mjs",
     "test:web:large": "node tests/web/large.mjs",
     "test:web:recovery": "node tests/web/recovery.mjs",
-    "test:web:stress": "node tests/web/stress.mjs"
+    "test:web:stress": "node tests/web/stress.mjs",
+    "test:web:merge": "node tests/web/merge.mjs",
+    "test:web:merge-large": "node tests/web/merge-large.mjs"
   },
   "devDependencies": {
     "playwright": "1.62.1"
